@@ -45,11 +45,11 @@ class CatalystSMP(commands.Bot):
     async def on_ready(self) -> None:
         log.info("Logged in as %s (ID: %s)", self.user, self.user.id)
         log.info("Serving %s guilds", len(self.guilds))
-        for guild in self.guilds:
-            try:
-                await self.tree.sync(guild=guild)
-            except Exception as exc:
-                log.warning("Failed to sync commands for %s: %s", guild, exc)
+        try:
+            synced = await self.tree.sync()
+            log.info("Synced %s global commands", len(synced))
+        except Exception as exc:
+            log.warning("Failed to sync global commands: %s", exc)
 
     async def on_command_error(
         self, ctx: commands.Context, error: commands.CommandError
