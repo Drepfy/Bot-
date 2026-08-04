@@ -4,7 +4,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-TOKEN = os.getenv("MTUzNDAwODA2MjE3NDU2NDM5Mw.Gh5QtM.ZiphcqTiENNycIZnQ6wOP9W4NzpSKjek9eCzzU", "")
+TOKEN = os.getenv(
+    "DISCORD_TOKEN",
+    "MTUzNDAwODA2MjE3NDU2NDM5Mw.Gh5QtM.ZiphcqTiENNycIZnQ6wOP9W4NzpSKjek9eCzzU",
+)
 PREFIX = os.getenv("BOT_PREFIX", "!")
 
 OWNER_ID = int(os.getenv("OWNER_ID", "0"))
