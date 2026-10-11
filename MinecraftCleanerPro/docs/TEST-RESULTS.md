@@ -15,7 +15,7 @@ assumed; anything that was **not** verified is listed under [Not verified](#not-
 
 204 tests in five projects. Runs on 2026-10-11:
 
-| Project | Tests | Linux (latest commit) | Windows CI run 2 |
+| Project | Tests | Linux | Windows CI (runs 2, 3, 4) |
 |---|---|---|---|
 | CleanerPro.Core.Tests | 63 | 62 passed, 1 skipped | 63 passed |
 | CleanerPro.Detection.Tests | 67 | 67 passed | 67 passed |
@@ -28,8 +28,9 @@ assumed; anything that was **not** verified is listed under [Not verified](#not-
   Windows system folder and passed on Windows.
 - Six tests that need symbolic links (`PathSafetyPolicyTests`, `EnumerationAndDiscoveryTests`,
   `QuarantineServiceTests`) **return early and count as passed** when the account is not allowed to create
-  links (Windows without Developer Mode or administrator rights). On Linux they executed fully. The CI
-  workflow logs whether links were allowed on the runner ("Report symbolic link permission" step).
+  links (Windows without Developer Mode or administrator rights). On Linux they executed fully. In Windows
+  CI runs 3 and 4 the "Report symbolic link permission" step logged `Symbolic links: allowed`, so they
+  executed fully on Windows too (run 2 predates that step).
 - No test uses real malware or a real cheat client. Detection tests use synthetic jars and synthetic class
   files that reproduce only the documented byte patterns (`tests/Shared/TestHelpers.cs`).
 
@@ -59,7 +60,7 @@ default with no network activity.
 |---|---|---|
 | Wine 9.0 | folder publish | 9/9 passed |
 | Wine 9.0 | compressed self-contained single file | 9/9 passed |
-| Windows CI run 2 | compressed self-contained single file | 9/9 passed |
+| Windows CI runs 2, 3, 4 | compressed self-contained single file | 9/9 passed |
 
 ### UI smoke test (`--smoke-ui`)
 
@@ -69,7 +70,7 @@ resource or invalid XAML). WPF data-binding errors are not exceptions and are no
 
 | Where | Result |
 |---|---|
-| Windows CI run 2 | all 9 pages rendered, log ends with `SMOKE-UI: OK` |
+| Windows CI runs 2, 3, 4 | all 9 pages rendered, log ends with `SMOKE-UI: OK` |
 | Wine 9.0 | **not possible**: WPF terminates inside its font-fallback code under this Wine build, also for a minimal one-window WPF program with no application code, so this is an environment limitation, not an application error |
 
 ## Windows CI runs
@@ -78,6 +79,8 @@ resource or invalid XAML). WPF data-binding errors are not exceptions and are no
 |---|---|---|
 | [1](https://github.com/Drepfy/Bot-/actions/runs/38164308767) | `d4c8c07` | **Failed**: `UnchangedCleanFilesAreReusedOnTheNextScan`. The scan cache stored its path keys through a camelCase dictionary-key policy, so `C:\USERS\…` was saved as `c:\USERS\…` and never matched again. Linux paths start with `/`, which is why it only appeared on Windows. |
 | [2](https://github.com/Drepfy/Bot-/actions/runs/38164580037) | `9e89812` | **Passed**: fix plus regression test `CacheKeysRoundTripExactly` (confirmed failing before and passing after the fix). 204/204 tests, self-test 9/9, smoke UI OK. Executable SHA-256 `9bee2cc55e3d7b9284224d271064a748905608acda0b2b408efe2019124905bb`. |
+| [3](https://github.com/Drepfy/Bot-/actions/runs/38165127174) | `b9268f7` | **Passed**: 204/204 tests, symbolic links allowed, self-test 9/9, smoke UI OK. |
+| [4](https://github.com/Drepfy/Bot-/actions/runs/38165168546) | `549113b` | **Passed**: 204/204 tests, symbolic links allowed, self-test 9/9, smoke UI OK. Executable SHA-256 `d7df637ddb97227726b3fc01e8e9e4207e4df6d1a925e9eaabb0400a2e69804b`. The self-test reported rule-database SHA-256 `64b09c45325ed7d10a0113402d94513ff2e6e2c71e17cbdade6187678f0e3981`, identical to Linux. |
 
 Every later commit gets its own run; the run's artifact contains the executable, its `.sha256`,
 `selftest.json`, `smoke-ui.log` and the test result files. The executable's bytes include the commit
@@ -95,7 +98,8 @@ id, so the hash changes with every commit — always compare against the `.sha25
 - **Rule tool**: `keygen`, `sign`, `verify` and `validate` were run on the bundled database; a modified copy
   of the signed file was rejected by `verify`.
 - **Line endings**: `.gitattributes` pins LF, so the embedded rule database has the same bytes and SHA-256 on
-  every platform (before this, a Windows checkout produced CRLF and a different hash).
+  every platform. Before this, a Windows checkout produced CRLF and a different hash; since run 3 the
+  Windows self-test reports the same hash as Linux.
 
 ## Not verified
 
