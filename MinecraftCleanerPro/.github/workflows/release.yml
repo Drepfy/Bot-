@@ -1,0 +1,93 @@
+name: Release
+
+# Publishes a download that anyone can use, without a GitHub account. Triggered by pushing a tag such as v1.1.0.
+# The executable is only published after every automated test, the executable's self-test and the UI smoke test
+# have passed on Windows, and only when the tag matches the Version in Directory.Build.props.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build, verify and publish the release
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+      TAG: ${{ github.ref_name }}
+      REPOSITORY: ${{ github.repository }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Check that the tag matches the version
+        run: |
+          [xml]$props = Get-Content Directory.Build.props
+          $version = @($props.Project.PropertyGroup | ForEach-Object { $_.Version } | Where-Object { $_ })[0]
+          if ("v$version" -ne $env:TAG) { throw "Tag '$env:TAG' does not match Version '$version' in Directory.Build.props." }
+          "Releasing version $version"
+
+      - name: Build, test, publish, self-test and UI smoke test
+        run: ./scripts/build.ps1 -SmokeUi
+
+      - name: Write the release notes
+        run: |
+          $version = $env:TAG.TrimStart('v')
+          $hash = ((Get-Content artifacts/publish/MinecraftCleanerPro.exe.sha256 -Raw).Trim() -split '\s+')[0]
+          $notes = (Get-Content docs/RELEASE-NOTES.md -Raw) -replace "`r`n", "`n"
+          $start = $notes.IndexOf("`n## $version")
+          if ($start -lt 0) { throw "docs/RELEASE-NOTES.md has no section for $version." }
+          $next = $notes.IndexOf("`n## ", $start + 1)
+          $section = if ($next -lt 0) { $notes.Substring($start) } else { $notes.Substring($start, $next - $start) }
+          $section = ($section.Trim() -split "`n", 2)[1].Trim()
+          $template = @'
+          ## Download
+
+          **[Download MinecraftCleanerPro.exe]({{URL}})** for Windows 10 and 11 (64-bit). No installation and no .NET download needed; just run it.
+
+          - SHA-256: `{{HASH}}` (in PowerShell: `Get-FileHash .\MinecraftCleanerPro.exe`)
+          - The program is **not code-signed**, so Windows SmartScreen shows "Windows protected your PC". Click **More info**, then **Run anyway**.
+          - Built from the source code in this repository and tested on Windows by GitHub Actions before it was published: [build log]({{RUN}}).
+          - It works offline, never needs administrator rights, and only removes files after you confirm them. Quarantined files can be restored.
+
+          ## What's new
+
+          {{SECTION}}
+          '@
+          $body = ($template -split "`n" | ForEach-Object { $_ -replace '^          ', '' }) -join "`n"
+          $body = $body.Replace('{{URL}}', "https://github.com/$env:REPOSITORY/releases/download/$env:TAG/MinecraftCleanerPro.exe").Replace('{{HASH}}', $hash).Replace('{{RUN}}', $env:RUN_URL).Replace('{{SECTION}}', $section)
+          Set-Content -Path artifacts/release-notes.md -Value $body -Encoding utf8
+          Get-Content artifacts/release-notes.md
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = $env:TAG.TrimStart('v')
+          gh release create $env:TAG artifacts/publish/MinecraftCleanerPro.exe artifacts/publish/MinecraftCleanerPro.exe.sha256 `
+            --title "Minecraft Cleaner Pro $version" --notes-file artifacts/release-notes.md --verify-tag
+          if ($LASTEXITCODE -ne 0) { throw "Creating the release failed." }
+
+      - name: Keep the verification results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-verification
+          path: |
+            artifacts/publish/MinecraftCleanerPro.exe.sha256
+            artifacts/selftest.json
+            artifacts/smoke-ui.log
+            artifacts/release-notes.md
+            artifacts/TestResults/**
+          if-no-files-found: warn

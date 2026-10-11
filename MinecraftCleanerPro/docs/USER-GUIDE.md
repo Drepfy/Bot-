@@ -4,8 +4,8 @@
 
 - Close Minecraft and every launcher, so files are not in use.
 - The application never needs administrator rights. If Windows SmartScreen warns about an unknown
-  publisher, that is because the build is **not code-signed**; compare the file's SHA-256 with the release
-  notes (`Get-FileHash .\MinecraftCleanerPro.exe` in PowerShell) before choosing *Run anyway*.
+  publisher, that is because the build is **not code-signed**; compare the file's SHA-256 with the one on the
+  [release page](https://github.com/Drepfy/MinecraftCleanerPro/releases/latest) (`Get-FileHash .\MinecraftCleanerPro.exe` in PowerShell) before choosing *Run anyway*.
 
 ## Private information is hidden
 

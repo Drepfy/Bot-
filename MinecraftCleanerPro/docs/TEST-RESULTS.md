@@ -51,6 +51,9 @@ New in this version (89 tests), all with synthetic fixtures:
 | [6](https://github.com/Drepfy/Bot-/actions/runs/38168431164) | `69bb54c` (new rules, weak spots, launchers, deleting) | **Passed**: 280/280 tests, symbolic links allowed, self-test 9/9, smoke UI OK (all 9 pages). |
 | [7](https://github.com/Drepfy/Bot-/actions/runs/38169202194) | `ee22fd4` (black bars, coexistence, docs) | **Passed**: 293/293 tests, symbolic links allowed, self-test 9/9 on Windows NT 10.0.26100 with rule database 2026.10.11.2, smoke UI OK (all 9 pages rendered with the new black-bar controls). Executable SHA-256 `b3dce77182783e11a763c084439a59029774864dbf6c99cfa2493ec854896f74`. |
 
+These hashes belong to development builds. The executable's bytes include the commit id, so every commit
+produces a different file; to check a download, compare it with the SHA-256 on its release page.
+
 ### Published executable (Linux build, run under Wine 9.0)
 
 | Check | Result |

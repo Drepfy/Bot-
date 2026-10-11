@@ -49,8 +49,8 @@ First release of Minecraft Cleaner Pro Ultimate.
 | `MinecraftCleanerPro.exe` | Windows 10/11 x64, self-contained single file (includes .NET 10 + WPF), ~62 MB, **unsigned** |
 | SHA-256 | Recorded in the `.sha256` file produced next to every build (`scripts/build.ps1` / `build.sh`, and the CI artifact). Always verify the hash of the exact file you received. |
 
-Build it yourself with `pwsh scripts/build.ps1` (see [BUILD.md](BUILD.md)) or download the
-`MinecraftCleanerPro-win-x64` artifact from the GitHub Actions run of the commit you trust.
+Build it yourself with `pwsh scripts/build.ps1` (see [BUILD.md](BUILD.md)). Version 1.0.0 was not published as a
+release; tested builds of later versions are on the [Releases page](https://github.com/Drepfy/MinecraftCleanerPro/releases).
 
 ### Features
 

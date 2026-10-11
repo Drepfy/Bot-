@@ -1,0 +1,56 @@
+name: Build and test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: Build, test and verify on Windows
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      # The symbolic-link tests return early when the account may not create links; record which case applies.
+      - name: Report symbolic link permission
+        run: |
+          $target = Join-Path $env:RUNNER_TEMP 'symlink-target.txt'
+          Set-Content -Path $target -Value 'probe'
+          try {
+            New-Item -ItemType SymbolicLink -Path (Join-Path $env:RUNNER_TEMP 'symlink-probe.txt') -Target $target -ErrorAction Stop | Out-Null
+            'Symbolic links: allowed (symbolic-link tests execute fully)'
+          } catch {
+            "Symbolic links: NOT allowed (symbolic-link tests return early): $($_.Exception.Message)"
+          }
+
+      - name: Build, test, publish, self-test and UI smoke test
+        run: ./scripts/build.ps1 -SmokeUi
+
+      - name: Upload executable and verification results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MinecraftCleanerPro-win-x64
+          path: |
+            artifacts/publish/MinecraftCleanerPro.exe
+            artifacts/publish/MinecraftCleanerPro.exe.sha256
+            artifacts/selftest.json
+            artifacts/smoke-ui.log
+            artifacts/TestResults/**
+          if-no-files-found: warn
