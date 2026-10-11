@@ -1,12 +1,16 @@
 """Builds the Diamond SMP "Black Hole" resource pack.
 
     pip install numpy numba pillow
-    python build_pack.py            # full quality (a few minutes)
+    python build_pack.py            # full quality (about 10 minutes on 4 cores)
     python build_pack.py --quick    # low-res draft
 
-Everything in the pack is generated from scratch by this script: the black hole
-skies are ray traced (see blackhole.py), the logo and icon are drawn in code.
-Block, item and mob textures are left vanilla on purpose.
+Everything in the pack is generated from scratch by this script: the skies are
+ray traced through a physical black hole (blackhole.py) and lit by a physical
+atmosphere (atmosphere.py); the logo and icon are drawn in code. Block, item
+and mob textures are left vanilla on purpose.
+
+The OptiFine sky is a set of layers that cross-fade over the Minecraft day:
+night (space), sunrise, day, sunset, plus overcast versions for rain.
 """
 
 import argparse
@@ -14,44 +18,41 @@ import hashlib
 import json
 import math
 import shutil
+import tempfile
 import time
 import zipfile
 from pathlib import Path
 
 import numpy as np
+from numba import njit, prange
 from PIL import Image, ImageFilter
 
+import atmosphere as atm
 import blackhole as bh
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "pack"
 ZIP_NAME = "Diamond-SMP-Black-Hole-Pack.zip"
+LITE_ZIP_NAME = "Diamond-SMP-Black-Hole-Pack-Lite.zip"
 MC = OUT / "assets" / "minecraft"
 
-# Colour ramps (linear RGB), cold to hot.
-DIAMOND = np.array([
-    [0.00, 0.00, 0.00],
-    [0.05, 0.01, 0.16],   # deep violet
-    [0.16, 0.05, 0.55],   # indigo
-    [0.05, 0.25, 0.95],   # royal blue
-    [0.05, 0.62, 1.00],   # diamond blue
-    [0.25, 0.90, 1.00],   # diamond cyan
-    [0.70, 1.00, 1.00],   # ice
-    [1.00, 1.00, 1.00],
-])
-VOID = np.array([          # the End: ender purple
-    [0.00, 0.00, 0.00],
-    [0.07, 0.00, 0.12],
-    [0.28, 0.02, 0.45],
-    [0.55, 0.08, 0.85],
-    [0.85, 0.25, 1.00],
-    [1.00, 0.55, 0.95],
-    [1.00, 0.85, 1.00],
-    [1.00, 1.00, 1.00],
-])
+# Scenes: where each black hole sits and how its disk is tilted.
+OVERWORLD = dict(distance=22, inclination=10, roll=-14, t_max=26000, opacity=2.2, seed=7)
+OVERWORLD_DIR = bh.mc_direction(0, -24)        # due south, 24 degrees up
+PANORAMA = dict(distance=24, inclination=9, roll=-10, t_max=26000, opacity=2.2, seed=11)
+PANORAMA_DIR = bh.mc_direction(-28, -9)
+END = dict(distance=18, inclination=17, roll=22, r_out=14, t_max=20000, opacity=2.4, seed=19)
+END_DIR = bh.mc_direction(-90, -32)             # east, high in the End sky
+GALAXY = dict(galactic_north=(0.35, 0.85, 0.4), galactic_centre=(0.2, -0.3, 1.0))
+# The End is lit by "ender light": push the physical colours towards violet.
+END_GRADE = np.array([[0.95, 0.05, 0.30], [0.04, 0.42, 0.10], [0.30, 0.05, 1.05]])
 
-DISK = dict(haze=0.012, disk_intensity=3.0, ring=0.8, disk_opacity=4.0,
-            temperature=0.82, temp_max=0.92, doppler_power=2.5)
+BG_GAIN = 150.0       # stars and Milky Way are lifted like an HDR astrophoto
+DISK_KEY = 1.35       # exposure: the brightest 0.3% of the disk lands here (pre-tonemap)
+SKY_KEY = 0.28        # exposure for the clear day sky at the zenith
+TWILIGHT_KEY = 1.3    # exposure for the brightest horizon glow at sunrise/sunset
+AUREOLE = ((3.0, 0.025), (9.0, 0.04), (22.0, 0.05))      # (sigma deg, fraction) haze glow
+CLOUD_GLOW = ((10.0, 0.30), (28.0, 0.40))                 # light diffusing through rain clouds
 
 
 def log(msg, t0=[time.time()]):
@@ -59,7 +60,7 @@ def log(msg, t0=[time.time()]):
 
 
 def save(img, rel):
-    path = MC / rel if not str(rel).startswith("/") else Path(rel)
+    path = MC / rel
     path.parent.mkdir(parents=True, exist_ok=True)
     if isinstance(img, np.ndarray):
         img = Image.fromarray(img)
@@ -67,8 +68,19 @@ def save(img, rel):
     return path
 
 
+def aces(x):
+    """ACES filmic curve (Narkowicz fit), per channel."""
+    x = np.maximum(x, 0)
+    return np.clip((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0, 1)
+
+
+def to8(rgb, dither_seed=None):
+    return bh.quantize(bh.srgb_encode(aces(rgb)), dither_seed)
+
+
 # ---------------------------------------------------------------------------
-# Direction grids for the different texture layouts
+# Direction grids for the different texture layouts (with optional padding,
+# so glare can be computed across face edges without seams)
 # ---------------------------------------------------------------------------
 
 
@@ -93,44 +105,105 @@ def optifine_tile_matrices():
 OPTIFINE_TILES = optifine_tile_matrices()
 
 
-def optifine_tile_dirs(tile, size):
-    t = (np.arange(size) + 0.5) / size * 2 - 1
+def _grid(n, pad):
+    return ((np.arange(n + 2 * pad) - pad) + 0.5) / n * 2 - 1
+
+
+def optifine_tile_dirs(tile, n, pad=0):
+    t = _grid(n, pad)
     lx, lz = np.meshgrid(t, t)
     local = np.stack([lx, -np.ones_like(lx), lz], -1)
     return bh.normalize(local @ OPTIFINE_TILES[tile].T)
 
 
-def panorama_dirs(face, size):
+def panorama_dirs(face, n, pad=0):
     """Vanilla title panorama: 0 front, 1 right, 2 back, 3 left, 4 up, 5 down."""
     yaw = [0, 90, 180, -90, 0, 0][face]
     pitch = [0, 0, 0, 0, -90, 90][face]
     f = bh.mc_direction(yaw, pitch)
     u = bh.mc_direction(yaw, pitch - 90)
     r = np.cross(f, u)
-    t = (np.arange(size) + 0.5) / size * 2 - 1
+    t = _grid(n, pad)
     a, b = np.meshgrid(t, t)
     d = f[None, None] + a[..., None] * r[None, None] - b[..., None] * u[None, None]
     return bh.normalize(d)
 
 
-def camera_dirs(w, h, half_tan_x, rotation=None):
+def camera_dirs(w, h, half_tan_x):
     """Pinhole camera looking along scene +z (scene right is -x)."""
     xs = ((np.arange(w) + 0.5) / w * 2 - 1) * half_tan_x
     ys = ((np.arange(h) + 0.5) / h * 2 - 1) * half_tan_x * h / w
     a, b = np.meshgrid(xs, ys)
-    d = bh.normalize(np.stack([-a, -b, np.ones_like(a)], -1))
-    return d if rotation is None else d @ rotation.T
+    return bh.normalize(np.stack([-a, -b, np.ones_like(a)], -1))
 
 
-def supersample(dir_fn, size, ss):
-    """Call dir_fn(size*ss) and return a function that averages ss x ss blocks."""
-    d = dir_fn(size * ss)
-    return d, (lambda img: img.reshape(size, ss, size, ss, -1).mean(axis=(1, 3)))
+def render_padded(scene, w2s, dir_fn, face, ss, pad):
+    """Trace one face (plus `pad` px on each side) with ss x ss supersampling."""
+    n = face + 2 * pad
+    out = scene.render(dir_fn(face * ss, pad * ss) @ w2s.T)
+    return out.reshape(n, ss, n, ss, 7).mean(axis=(1, 3)), dir_fn(face, pad)
 
 
-def render_world(scene, world_to_scene, dir_fn, size, ss):
-    dirs, shrink = supersample(dir_fn, size, ss)
-    return shrink(scene.render(dirs @ world_to_scene.T))
+def crop(img, pad):
+    return img[pad:img.shape[0] - pad, pad:img.shape[1] - pad] if pad else img
+
+
+def upsample(img, size):
+    chans = [np.array(Image.fromarray(img[..., c].astype(np.float32), "F").resize((size, size), Image.BILINEAR))
+             for c in range(img.shape[-1])]
+    return np.stack(chans, -1).astype(np.float64)
+
+
+# ---------------------------------------------------------------------------
+# Atmospheric glow around the black hole (computed on the sphere, so seamless)
+# ---------------------------------------------------------------------------
+
+
+@njit(parallel=True, fastmath=True)
+def _glow_kernel(dirs, sdirs, sflux, sig, wts, out):
+    for i in prange(dirs.shape[0]):
+        dx, dy, dz = dirs[i, 0], dirs[i, 1], dirs[i, 2]
+        r, g, b = 0.0, 0.0, 0.0
+        for j in range(sdirs.shape[0]):
+            th2 = 2.0 * (1.0 - (dx * sdirs[j, 0] + dy * sdirs[j, 1] + dz * sdirs[j, 2]))
+            k = 0.0
+            for s in range(sig.shape[0]):
+                k += wts[s] / (2 * math.pi * sig[s] * sig[s]) * math.exp(-th2 / (2 * sig[s] * sig[s]))
+            r += sflux[j, 0] * k
+            g += sflux[j, 1] * k
+            b += sflux[j, 2] * k
+        out[i, 0] = r
+        out[i, 1] = g
+        out[i, 2] = b
+
+
+class Emitter:
+    """The black hole's disk light as a cloud of point sources (world frame)."""
+
+    def __init__(self, scene, w2s, half_fov=40.0, res=256, bins=64):
+        ht = math.tan(math.radians(half_fov))
+        d = camera_dirs(res, res, ht)
+        light = scene.render(d)[..., :3]
+        px = 2 * ht / res
+        a = -d[..., 0] / d[..., 2]
+        b = -d[..., 1] / d[..., 2]
+        domega = px * px / (1 + a * a + b * b) ** 1.5
+        k = res // bins
+        flux = (light * domega[..., None]).reshape(bins, k, bins, k, 3).sum(axis=(1, 3)).reshape(-1, 3)
+        sd = bh.normalize(d.reshape(bins, k, bins, k, 3).mean(axis=(1, 3)).reshape(-1, 3))
+        keep = flux @ bh.LUMA > 1e-9
+        self.dirs = np.ascontiguousarray(sd[keep] @ w2s)
+        self.flux = np.ascontiguousarray(flux[keep])
+        self.p997 = float(np.percentile(light @ bh.LUMA, 99.7))
+        self.centre = bh.normalize(w2s[2])
+
+    def glow(self, dirs, comps):
+        sig = np.array([math.radians(s) for s, _ in comps])
+        wts = np.array([w for _, w in comps])
+        flat = np.ascontiguousarray(dirs.reshape(-1, 3))
+        out = np.zeros((flat.shape[0], 3))
+        _glow_kernel(flat, self.dirs, self.flux, sig, wts, out)
+        return out.reshape(*dirs.shape[:-1], 3)
 
 
 # ---------------------------------------------------------------------------
@@ -138,61 +211,114 @@ def render_world(scene, world_to_scene, dir_fn, size, ss):
 # ---------------------------------------------------------------------------
 
 
-def render_optifine_sky(scene, target_dir, face, ss, exposure, seed):
-    w2s = bh.world_to_scene(target_dir)
-    img = np.zeros((2 * face, 3 * face, 3), dtype=np.uint8)
+def airglow(dirs):
+    """Faint natural glow of the night air, strongest towards the horizon."""
+    s = np.clip(dirs[..., 1], 0, 1)
+    return (0.0025 / (s + 0.12))[..., None] * np.array([0.45, 0.75, 0.40])
+
+
+def overworld_layers(face, ss, pad, galaxy, log_prefix="  "):
+    """Night / sunrise / day / sunset / overcast skies for the Overworld (OptiFine 3x2)."""
+    scene = bh.BlackHoleScene(background=galaxy, **OVERWORLD)
+    w2s = bh.world_to_scene(OVERWORLD_DIR)
+    em = Emitter(scene, w2s)
+    e_disk = DISK_KEY / em.p997
+
+    day_suns = [atm.sun_direction(el, side) for el in (25, 45, 65, 85) for side in (1, -1)]
+    skies = {
+        "day": atm.SkyModel(day_suns, mie_g=0.7),
+        "sunrise": atm.SkyModel([atm.sun_direction(2.0, 1)]),
+        "sunset": atm.SkyModel([atm.sun_direction(2.0, -1)]),
+    }
+    zen = np.array([[0.0, 1.0, 0.0]])
+    e_sky = {"day": SKY_KEY / float(skies["day"].radiance(zen)[0] @ bh.LUMA)}
+    for name, side in (("sunrise", 1), ("sunset", -1)):
+        hor = bh.normalize(np.array([[side, 0.08, 0.0]]))
+        e_sky[name] = TWILIGHT_KEY / float(skies[name].radiance(hor)[0] @ bh.LUMA)
+    # The black hole's brightness through the haze, relative to each sky.
+    e_bh = {"night": e_disk, "day": 0.55 * e_disk, "sunrise": 0.65 * e_disk, "sunset": 0.65 * e_disk}
+
+    names = ["night", "sunrise", "day", "sunset"]
+    imgs = {n: np.zeros((2 * face, 3 * face, 3), dtype=np.uint8) for n in names}
+    lo_face, lo_pad = max(face // 8, 8), max(pad // 8, 1)
+    full = face + 2 * pad
     for tile in range(6):
-        rgb = render_world(scene, w2s, lambda n: optifine_tile_dirs(tile, n), face, ss)[..., :3]
+        fn = lambda n, p: optifine_tile_dirs(tile, n, p)  # noqa: E731
+        raw, world = render_padded(scene, w2s, fn, face, ss, pad)
+        halo = upsample(em.glow(fn(lo_face, lo_pad), AUREOLE), full)
+        trn = skies["day"].transmittance(world)
+        disk, stars = raw[..., :3], raw[..., 3:6]
         r, c = divmod(tile, 3)
-        img[r * face:(r + 1) * face, c * face:(c + 1) * face] = bh.tonemap(rgb, exposure, seed + tile)
-        log(f"  sky tile {tile + 1}/6")
-    return img
+        for name in names:
+            e = e_bh[name]
+            if name == "night":  # clear night air carries less haze than daytime air
+                # eyes adapt at night: the sky background is lifted twice as much
+                hdr = (disk + stars * BG_GAIN * 2) * trn * e + halo * e * 0.35 + airglow(world)
+            else:
+                hdr = disk * trn * e + halo * e + skies[name].radiance(world) * e_sky[name]
+            hdr = crop(bh.glare(hdr, scale=face / 1024), pad)
+            imgs[name][r * face:(r + 1) * face, c * face:(c + 1) * face] = to8(
+                hdr, 100 + tile if name == "night" else None)
+        log(f"{log_prefix}overworld tile {tile + 1}/6")
+
+    # Rain: the hole is only a diffuse glow through the clouds.
+    oc = max(face // 4, 64)
+    over = {n: np.zeros((2 * oc, 3 * oc, 3), dtype=np.uint8) for n in ("overcast_day", "overcast_night")}
+    for tile in range(6):
+        d = optifine_tile_dirs(tile, oc)
+        s = np.clip(d[..., 1], 0, 1)[..., None]
+        cloud = (1 + 2 * s) / 3 * np.array([0.80, 0.82, 0.86])
+        glow = em.glow(d, CLOUD_GLOW) * 0.4
+        r, c = divmod(tile, 3)
+        over["overcast_day"][r * oc:(r + 1) * oc, c * oc:(c + 1) * oc] = to8(cloud * 0.42 + glow * e_bh["day"])
+        over["overcast_night"][r * oc:(r + 1) * oc, c * oc:(c + 1) * oc] = to8(
+            cloud * 0.012 + glow * e_disk * 0.35, 200 + tile)
+    imgs.update(over)
+    return imgs
 
 
-def render_panorama(scene, target_dir, face, ss, exposure, seed):
-    w2s = bh.world_to_scene(target_dir)
+def space_faces(scene, w2s, dir_fn, face, ss, pad, grade=None, dither=0):
+    """Six faces of pure space (no atmosphere): panorama or the End."""
+    em_key = DISK_KEY / Emitter(scene, w2s, res=192, bins=48).p997
+    faces = []
     for k in range(6):
-        rgb = render_world(scene, w2s, lambda n: panorama_dirs(k, n), face, ss)[..., :3]
-        save(bh.tonemap(rgb, exposure, seed + k), f"textures/gui/title/background/panorama_{k}.png")
-        log(f"  panorama {k + 1}/6")
+        fn = lambda n, p: dir_fn(k, n, p)  # noqa: E731
+        raw, _ = render_padded(scene, w2s, fn, face, ss, pad)
+        hdr = (raw[..., :3] + raw[..., 3:6] * BG_GAIN) * em_key
+        if grade is not None:
+            hdr = hdr @ grade.T
+        faces.append(to8(crop(bh.glare(hdr, scale=face / 1024), pad), dither + k))
+        log(f"  face {k + 1}/6")
+    return faces
 
 
 def render_sun(size, ss):
-    """The vanilla sun becomes a small black hole (drawn additively by the game)."""
-    scene = bh.BlackHoleScene(DIAMOND, distance=40, inclination=14, roll=24, r_out=9.5, seed=21,
-                              **{**DISK, "disk_intensity": 3.4, "haze": 0.02})
+    """The vanilla sun becomes a small black hole (the game draws it additively)."""
+    scene = bh.BlackHoleScene(distance=40, inclination=14, roll=24, r_out=9.5, seed=21, t_max=26000, opacity=2.2)
     # The sun quad is 30 units wide at distance 100: half-angle tangent 0.3.
-    dirs = camera_dirs(size * ss, size * ss, 0.3)
-    out = scene.render(dirs).reshape(size, ss, size, ss, 4).mean(axis=(1, 3))
+    out = scene.render(camera_dirs(size * ss, size * ss, 0.3)).reshape(size, ss, size, ss, 7).mean(axis=(1, 3))
+    disk = out[..., :3] * (DISK_KEY * 1.2 / np.percentile(out[..., :3] @ bh.LUMA, 99.7))
     t = (np.arange(size) + 0.5) / size * 2 - 1
     a, b = np.meshgrid(t, t)
-    rad = np.sqrt(a * a + b * b)
-    fade = np.clip((1.0 - rad) / 0.25, 0, 1) ** 2
-    lin = 1.0 - np.exp(-out[..., :3] * 1.1)
-    srgb = np.where(lin <= 0.0031308, 12.92 * lin, 1.055 * lin ** (1 / 2.4) - 0.055) * fade[..., None]
-    alpha = np.maximum(srgb.max(-1), out[..., 3] * fade)
+    fade = np.clip((1.0 - np.sqrt(a * a + b * b)) / 0.25, 0, 1) ** 2
+    srgb = bh.srgb_encode(aces(bh.glare(disk, scale=size / 1024))) * fade[..., None]
+    alpha = np.maximum(srgb.max(-1), out[..., 6] * fade)
     rgb = np.where(alpha[..., None] > 1e-4, srgb / np.maximum(alpha[..., None], 1e-4), 0)
-    rgba = np.concatenate([rgb, alpha[..., None]], -1)
-    return np.clip(np.round(rgba * 255), 0, 255).astype(np.uint8)
+    return np.clip(np.round(np.concatenate([rgb, alpha[..., None]], -1) * 255), 0, 255).astype(np.uint8)
 
 
-def render_star_sun(size):
-    """OptiFine replaces the sun with a diamond-white star so the sky has one black hole."""
+def render_real_sun(size):
+    """OptiFine sun: a limb-darkened 5800 K disc with atmospheric glare."""
     t = (np.arange(size) + 0.5) / size * 2 - 1
     a, b = np.meshgrid(t, t)
-    r = np.sqrt(a * a + b * b)
-    core = np.exp(-(r / 0.035) ** 2) * 3.0 + np.exp(-(r / 0.09) ** 2) * 0.6 + np.exp(-r / 0.22) * 0.12
-    spikes = np.zeros_like(r)
-    for ang, length in ((0, 0.75), (90, 0.75), (45, 0.32), (135, 0.32)):
-        ca, sa = math.cos(math.radians(ang)), math.sin(math.radians(ang))
-        along = a * ca + b * sa
-        across = -a * sa + b * ca
-        spikes += np.exp(-(across / 0.012) ** 2) * np.exp(-np.abs(along) / (length * 0.35))
-    lum = core + spikes * 0.9
-    col = np.array([0.75, 0.95, 1.0])
-    rgb = 1.0 - np.exp(-lum[..., None] * col * 1.4)
-    rgb *= np.clip((1.0 - r) / 0.2, 0, 1)[..., None]
-    return np.clip(np.round(rgb ** (1 / 2.2) * 255), 0, 255).astype(np.uint8)
+    theta = np.degrees(np.arctan(0.3 * np.sqrt(a * a + b * b)))
+    radius = 1.4  # degrees (the real sun is 0.27; enlarged so it reads in game)
+    mu = np.sqrt(np.clip(1 - (theta / radius) ** 2, 0, 1))
+    disc = np.where(theta < radius, 1 - 0.6 * (1 - mu), 0) * 40.0
+    halo = 1.2 * np.exp(-theta / 0.9) + 0.25 * np.exp(-theta / 3.5) + 0.05 * np.exp(-theta / 10)
+    rgb = (disc + halo)[..., None] * bh.blackbody_colour(5800.0)
+    rgb *= np.clip((16.0 - theta) / 3.0, 0, 1)[..., None]
+    return to8(rgb)
 
 
 def render_end_tile(size, seed):
@@ -208,7 +334,7 @@ def render_end_tile(size, seed):
     n = size * size // 90
     xs, ys = rng.uniform(0, size, n), rng.uniform(0, size, n)
     br = np.clip(0.25 * (rng.pareto(1.6, n) + 1) ** 1.3, 0, 4)
-    tint = bh.star_colour(rng.choice([4000, 6500, 9000, 16000, 25000], n))
+    tint = bh.blackbody_colour(rng.choice([4000, 6500, 9000, 16000, 25000], n).astype(float))
     for x, y, v, c in zip(xs, ys, br, tint):
         x0, y0 = int(x), int(y)
         for dy in (-1, 0, 1, 2):
@@ -216,7 +342,7 @@ def render_end_tile(size, seed):
                 px, py = (x0 + dx) % size, (y0 + dy) % size
                 d2 = (x0 + dx + 0.5 - x) ** 2 + (y0 + dy + 0.5 - y) ** 2
                 img[py, px] += c * v * math.exp(-d2 / 0.5)
-    return bh.tonemap(img, 2.2, seed)
+    return to8(img * 2.2, seed)
 
 
 # ---------------------------------------------------------------------------
@@ -349,12 +475,15 @@ GEM_COL = {"#": "#06203d", "W": "#ffffff", "L": "#9ff6ff", "M": "#33d0ea", "D": 
 
 def make_icon(size=256):
     """Pack icon: the black hole with a pixel-art diamond burning in front of it."""
-    scene = bh.BlackHoleScene(DIAMOND, distance=17, inclination=12, roll=-18, r_out=11, seed=33,
-                              background=bh.make_starfield(256, 41, (0.12, 0.04, 0.35), (0.02, 0.18, 0.40),
-                                                           (0.3, 0.8, 0.5), n_stars=6000), **DISK)
-    dirs = camera_dirs(size * 3, size * 3, math.tan(math.radians(36)))
-    img = scene.render(dirs).reshape(size, 3, size, 3, 4).mean(axis=(1, 3))
-    icon = Image.fromarray(bh.tonemap(img[..., :3], 1.0, 3)).convert("RGBA")
+    galaxy = bh.make_galaxy(256, 41, (0.3, 0.8, 0.5), (0.4, -0.5, 1.0), n_stars=8000)
+    scene = bh.BlackHoleScene(distance=17, inclination=12, roll=-18, r_out=11, seed=33, t_max=26000,
+                              opacity=2.2, background=galaxy)
+    ss = 3
+    out = scene.render(camera_dirs(size * ss, size * ss, math.tan(math.radians(36))))
+    out = out.reshape(size, ss, size, ss, 7).mean(axis=(1, 3))
+    e = DISK_KEY / np.percentile(out[..., :3] @ bh.LUMA, 99.7)
+    hdr = (out[..., :3] + out[..., 3:6] * BG_GAIN) * e
+    icon = Image.fromarray(to8(bh.glare(hdr, scale=size / 1024), 3)).convert("RGBA")
     cell = max(size // 64, 1)  # gem pixel size
     gw, gh = 16 * cell, len(GEM) * cell
     gem = Image.new("RGBA", (gw, gh), (0, 0, 0, 0))
@@ -427,7 +556,7 @@ PACK_MCMETA = {
             "",  # empty root so the parts below don't inherit each other's style
             {"text": "Diamond SMP ", "color": "aqua", "bold": True},
             {"text": "Black Hole Sky", "color": "light_purple"},
-            {"text": "\nVanilla+ • ray traced space", "color": "gray"},
+            {"text": "\nRealistic day & night • ray traced", "color": "gray"},
         ],
         # 1.20 (format 15) and everything newer, including 1.21.9+ min/max fields.
         "pack_format": 34,
@@ -437,14 +566,26 @@ PACK_MCMETA = {
     }
 }
 
-OVERWORLD_SKY = """# Diamond SMP - black hole skybox (overworld)
-# Layout: 3x2 cube map, always visible, in every weather.
-source=./blackhole_sky.png
-blend=replace
-rotate=false
-weather=clear rain thunder
-transition=1
-"""
+# (texture, description, (startFadeIn, endFadeIn, endFadeOut), weather). Order matters:
+# later layers are drawn over earlier ones while they fade.
+OVERWORLD_LAYERS = [
+    ("night", "Night: deep space, the Milky Way and the black hole", ("18:15", "19:15", "05:45"), "clear"),
+    ("sunrise", "Sunrise: physical sky, sun rising in the east", ("04:30", "05:30", "07:45"), "clear"),
+    ("day", "Day: blue sky, the black hole shining through the haze", ("06:15", "07:30", "18:00"), "clear"),
+    ("sunset", "Sunset: physical sky, sun setting in the west", ("16:15", "17:15", "19:30"), "clear"),
+    ("overcast_day", "Rain by day: the black hole glows behind the clouds", ("05:00", "06:30", "19:00"),
+     "rain thunder"),
+    ("overcast_night", "Rain by night: a faint glow behind the clouds", ("17:15", "18:45", "06:45"),
+     "rain thunder"),
+]
+
+
+def layer_props(name, comment, fades, weather):
+    return (f"# Diamond SMP - {comment}\n"
+            f"source=./{name}.png\nblend=alpha\nrotate=false\n"
+            f"startFadeIn={fades[0]}\nendFadeIn={fades[1]}\nendFadeOut={fades[2]}\n"
+            f"weather={weather}\ntransition=3\n")
+
 
 END_SKY = """# Diamond SMP - black hole skybox (the End)
 source=./void_sky.png
@@ -453,67 +594,96 @@ rotate=false
 weather=clear rain thunder
 """
 
-SUN_PROPS = """# With the black hole skybox active, the sun becomes a distant diamond-white star.
-source=./diamond_star.png
+SUN_PROPS = """# The black hole is its own object in the sky, so the sun is a real sun again.
+source=./sun.png
 blend=add
 """
 
 
-def write_text(rel, text):
-    path = OUT / rel
+def write_text(rel, text, root=OUT):
+    path = root / rel
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8", newline="\n")
+
+
+def zip_dir(src, zpath):
+    if zpath.exists():
+        zpath.unlink()
+    with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
+        for f in sorted(src.rglob("*")):
+            if f.is_file():
+                z.write(f, f.relative_to(src).as_posix())
+    sha1 = hashlib.sha1(zpath.read_bytes()).hexdigest()
+    log(f"wrote {zpath.name} ({zpath.stat().st_size / 1e6:.1f} MB, sha1 {sha1})")
+
+
+def is_big_sky_texture(rel):
+    rel = rel.as_posix()
+    return ((rel.startswith("optifine/sky/") and not rel.endswith("/sun.png"))
+            or rel.startswith("textures/gui/title/background/panorama_")
+            or rel in ("textures/environment/sun.png", "textures/environment/celestial/sun.png"))
+
+
+def make_lite():
+    """Same pack with every sky texture at half resolution (a quarter of the VRAM)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        lite = Path(tmp) / "pack"
+        shutil.copytree(OUT, lite)
+        mc = lite / "assets" / "minecraft"
+        for p in sorted(mc.rglob("*.png")):
+            if is_big_sky_texture(p.relative_to(mc)):
+                im = Image.open(p)
+                im.resize((im.width // 2, im.height // 2), Image.LANCZOS).save(p, optimize=True)
+        meta = json.loads(json.dumps(PACK_MCMETA))
+        meta["pack"]["description"][2]["text"] = "Black Hole Sky Lite"
+        write_text("pack.mcmeta", json.dumps(meta, indent=2, ensure_ascii=False) + "\n", root=lite)
+        zip_dir(lite, ROOT / LITE_ZIP_NAME)
 
 
 def build(quick):
     face = 256 if quick else 1024
     ss = 1 if quick else 2
-    bg_size = 512 if quick else 2048
+    pad = face // 8
     if OUT.exists():
         shutil.rmtree(OUT)
     OUT.mkdir(parents=True)
 
-    log("starfield (overworld)")
-    diamond_bg = bh.make_starfield(bg_size, 3, (0.12, 0.04, 0.35), (0.02, 0.18, 0.40), (0.25, 0.9, 0.35),
-                                   n_stars=30000 if quick else 70000)
+    log("galaxy (stars, Milky Way, dust, nebulae)")
+    galaxy = bh.make_galaxy(512 if quick else 2048, 3, n_stars=40000 if quick else 220000, star_flux=1.1, **GALAXY)
 
-    log("overworld black hole skybox (OptiFine)")
-    sky = bh.BlackHoleScene(DIAMOND, distance=22, inclination=10, roll=-14, background=diamond_bg, **DISK)
-    target = bh.mc_direction(0, -24)  # due south, 24 degrees above the horizon
-    img = render_optifine_sky(sky, target, face, ss, 1.0, 100)
-    save(img, "optifine/sky/world0/blackhole_sky.png")
-    write_text("assets/minecraft/optifine/sky/world0/sky1.properties", OVERWORLD_SKY)
+    log("overworld sky layers (OptiFine)")
+    imgs = overworld_layers(face, ss, pad, galaxy)
+    for i, (name, comment, fades, weather) in enumerate(OVERWORLD_LAYERS, 1):
+        save(imgs[name], f"optifine/sky/world0/{name}.png")
+        write_text(f"assets/minecraft/optifine/sky/world0/sky{i}.properties", layer_props(name, comment, fades, weather))
+    save(render_real_sun(256), "optifine/sky/world0/sun.png")
+    write_text("assets/minecraft/optifine/sky/world0/sun.properties", SUN_PROPS)
 
     log("title screen panorama")
-    pano = bh.BlackHoleScene(DIAMOND, distance=24, inclination=9, roll=-10, background=diamond_bg, seed=11, **DISK)
-    render_panorama(pano, bh.mc_direction(-28, -9), face, ss, 1.0, 200)
-    del diamond_bg
+    pano = bh.BlackHoleScene(background=galaxy, **PANORAMA)
+    for k, img in enumerate(space_faces(pano, bh.world_to_scene(PANORAMA_DIR), panorama_dirs, face, ss, pad,
+                                        dither=300)):
+        save(img, f"textures/gui/title/background/panorama_{k}.png")
 
-    log("starfield (End)")
-    void_bg = bh.make_starfield(bg_size, 8, (0.30, 0.03, 0.40), (0.08, 0.05, 0.45), (0.8, 0.5, -0.2),
-                                n_stars=30000 if quick else 70000)
     log("End black hole skybox (OptiFine)")
-    end = bh.BlackHoleScene(VOID, distance=18, inclination=17, roll=22, background=void_bg, seed=19,
-                            r_out=14, **{**DISK, "temperature": 0.78, "temp_max": 0.88})
-    img = render_optifine_sky(end, bh.mc_direction(-90, -32), face, ss, 1.0, 300)
-    save(img, "optifine/sky/world1/void_sky.png")
+    end = bh.BlackHoleScene(background=galaxy, **END)
+    tiles = space_faces(end, bh.world_to_scene(END_DIR), optifine_tile_dirs, face, ss, pad,
+                        grade=END_GRADE, dither=400)
+    sky = np.zeros((2 * face, 3 * face, 3), dtype=np.uint8)
+    for t, img in enumerate(tiles):
+        r, c = divmod(t, 3)
+        sky[r * face:(r + 1) * face, c * face:(c + 1) * face] = img
+    save(sky, "optifine/sky/world1/void_sky.png")
     write_text("assets/minecraft/optifine/sky/world1/sky1.properties", END_SKY)
-    del void_bg
+    del galaxy
 
     log("vanilla sun -> black hole")
     sun = render_sun(256 if quick else 512, 1 if quick else 3)
     save(sun, "textures/environment/sun.png")             # up to 1.21.10
     save(sun, "textures/environment/celestial/sun.png")   # 1.21.11 and newer
-    save(render_star_sun(256), "optifine/sky/world0/diamond_star.png")
-    write_text("assets/minecraft/optifine/sky/world0/sun.properties", SUN_PROPS)
 
-    log("vanilla End sky tile")
+    log("vanilla End sky tile, logo, edition, icon, splashes")
     save(render_end_tile(256, 4), "textures/environment/end_sky.png")
-
-    log("OptiFine fog colour (matches the space horizon)")
-    save(Image.new("RGB", (256, 256), (22, 24, 52)), "optifine/colormap/fog0.png")
-
-    log("logo, edition, icon, splashes")
     logo = make_logo()
     save(logo, "textures/gui/title/minecraft.png")
     save(logo, "textures/gui/title/minceraft.png")
@@ -522,15 +692,8 @@ def build(quick):
     write_text("assets/minecraft/texts/splashes.txt", SPLASHES)
     write_text("pack.mcmeta", json.dumps(PACK_MCMETA, indent=2, ensure_ascii=False) + "\n")
 
-    zpath = ROOT / ZIP_NAME
-    if zpath.exists():
-        zpath.unlink()
-    with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
-        for f in sorted(OUT.rglob("*")):
-            if f.is_file():
-                z.write(f, f.relative_to(OUT).as_posix())
-    sha1 = hashlib.sha1(zpath.read_bytes()).hexdigest()
-    log(f"wrote {zpath.name} ({zpath.stat().st_size / 1e6:.1f} MB, sha1 {sha1})")
+    zip_dir(OUT, ROOT / ZIP_NAME)
+    make_lite()
 
 
 if __name__ == "__main__":

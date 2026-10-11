@@ -6,13 +6,12 @@ It reads the generated textures back exactly the way the game maps them
 
 import math
 import sys
-from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 import blackhole as bh
-from build_pack import MC, OPTIFINE_TILES, ROOT, panorama_dirs  # noqa: F401
+from build_pack import MC, OPTIFINE_TILES, ROOT
 
 PREVIEWS = ROOT / "previews"
 
@@ -31,16 +30,21 @@ def player_view(yaw, pitch, w, h, fov_y=70.0):
 def sample_optifine(tex, dirs):
     face = tex.shape[0] // 2
     best = np.full(dirs.shape[:-1], -np.inf)
-    out = np.zeros(dirs.shape[:-1] + (3,), dtype=np.uint8)
+    out = np.zeros(dirs.shape[:-1] + (3,), dtype=np.float64)
     for tile, m in enumerate(OPTIFINE_TILES):
         loc = dirs @ m  # world -> tile-local (inverse of a rotation is its transpose)
         depth = -loc[..., 1]
         sel = depth > best
         best = np.where(sel, depth, best)
-        u = np.clip(((loc[..., 0] / depth + 1) / 2 * face).astype(int), 0, face - 1)
-        v = np.clip(((loc[..., 2] / depth + 1) / 2 * face).astype(int), 0, face - 1)
+        fu = np.clip((loc[..., 0] / depth + 1) / 2 * face - 0.5, 0, face - 1.001)
+        fv = np.clip((loc[..., 2] / depth + 1) / 2 * face - 0.5, 0, face - 1.001)
+        iu, iv = fu.astype(int), fv.astype(int)
+        du, dv = (fu - iu)[..., None], (fv - iv)[..., None]
         r, c = divmod(tile, 3)
-        out[sel] = tex[r * face + v[sel], c * face + u[sel]]
+        t = tex[r * face:(r + 1) * face, c * face:(c + 1) * face].astype(np.float64)
+        val = ((t[iv, iu] * (1 - du) + t[iv, iu + 1] * du) * (1 - dv)
+               + (t[iv + 1, iu] * (1 - du) + t[iv + 1, iu + 1] * du) * dv)
+        out[sel] = val[sel]
     return out
 
 
@@ -63,18 +67,24 @@ def sample_panorama(faces, dirs):
     return out
 
 
-def add_ground(img, dirs):
-    """Silhouette of rolling hills so the sky preview reads as an in-game view."""
-    h, w = img.shape[:2]
+def add_sun(img, dirs, sun_dir, strength=1.0):
+    """Approximate the OptiFine sun sprite the game draws on top of the sky."""
+    ang = np.degrees(np.arccos(np.clip(dirs @ sun_dir, -1, 1)))
+    glow = np.where(ang < 1.4, 1.0, 0) + 0.6 * np.exp(-ang / 0.9) + 0.12 * np.exp(-ang / 4.0)
+    col = np.array([255, 244, 225]) * strength
+    return np.clip(img + glow[..., None] * col, 0, 255)
+
+
+def add_ground(img, dirs, colour):
+    """Silhouette of blocky hills so the sky preview reads as an in-game view."""
     yaw = np.degrees(np.arctan2(-dirs[..., 0], dirs[..., 2]))
     elev = np.degrees(np.arcsin(np.clip(dirs[..., 1], -1, 1)))
     hill = 2.5 + 2.0 * np.sin(np.radians(yaw) * 3.0) + 1.2 * np.sin(np.radians(yaw) * 7.3 + 1.0)
-    hill = np.round(hill / 1.2) * 1.2  # blocky skyline
+    hill = np.round(hill / 1.2) * 1.2
     ground = elev < hill
-    shade = np.clip(0.5 + (elev - hill) / 30, 0.15, 0.5)
-    col = np.stack([0.11 * shade, 0.16 * shade, 0.10 * shade], -1) * 255
+    shade = np.clip(1.0 + (elev - hill) / 40, 0.45, 1.0)[..., None]
     img = img.copy()
-    img[ground] = col[ground].astype(np.uint8)
+    img[ground] = (np.array(colour) * shade)[ground]
     return img
 
 
@@ -87,19 +97,55 @@ def font(size):
     return ImageFont.load_default()
 
 
+def label(img, text):
+    im = Image.fromarray(img.astype(np.uint8))
+    d = ImageDraw.Draw(im)
+    d.rectangle([0, 0, 14 + 15 * len(text), 40], fill=(0, 0, 0))
+    d.text((10, 6), text, fill=(255, 255, 255), font=font(24))
+    return np.array(im)
+
+
+def sky(name, world="world0"):
+    return np.array(Image.open(MC / f"optifine/sky/{world}/{name}.png").convert("RGB"))
+
+
 def main():
     PREVIEWS.mkdir(exist_ok=True)
     W, H = 1280, 720
+    shots = []
 
-    sky = np.array(Image.open(MC / "optifine/sky/world0/blackhole_sky.png").convert("RGB"))
     d = player_view(0, -14, W, H)  # facing south, looking up a little
-    Image.fromarray(add_ground(sample_optifine(sky, d), d)).save(PREVIEWS / "overworld_sky.png", optimize=True)
-    d = player_view(0, -60, W, H, 90)
-    Image.fromarray(sample_optifine(sky, d)).save(PREVIEWS / "overworld_sky_up.png", optimize=True)
+    night = add_ground(sample_optifine(sky("night"), d), d, (8, 11, 8))
+    Image.fromarray(night.astype(np.uint8)).save(PREVIEWS / "overworld_night.png", optimize=True)
+    shots.append(label(night, "Night"))
 
-    end = np.array(Image.open(MC / "optifine/sky/world1/void_sky.png").convert("RGB"))
-    d = player_view(-90, -28, W, H)  # east
-    Image.fromarray(sample_optifine(end, d)).save(PREVIEWS / "end_sky.png", optimize=True)
+    d = player_view(-45, -12, W, H, 78)  # south-east: sunrise and the black hole
+    img = add_sun(sample_optifine(sky("sunrise"), d), d, bh.normalize([1.0, 0.05, 0.0]))
+    sunrise = add_ground(img, d, (34, 30, 30))
+    shots.append(label(sunrise, "Sunrise"))
+
+    d = player_view(0, -14, W, H)
+    day = add_ground(sample_optifine(sky("day"), d), d, (62, 92, 44))
+    Image.fromarray(day.astype(np.uint8)).save(PREVIEWS / "overworld_day.png", optimize=True)
+    shots.append(label(day, "Day"))
+
+    d = player_view(45, -12, W, H, 78)  # south-west: sunset
+    img = add_sun(sample_optifine(sky("sunset"), d), d, bh.normalize([-1.0, 0.05, 0.0]))
+    sunset = add_ground(img, d, (34, 28, 30))
+    shots.append(label(sunset, "Sunset"))
+
+    grid = np.concatenate([np.concatenate(shots[:2], 1), np.concatenate(shots[2:], 1)], 0).astype(np.uint8)
+    Image.fromarray(grid).resize((W, H), Image.LANCZOS).save(PREVIEWS / "day_cycle.png", optimize=True)
+
+    d = player_view(0, -14, W // 2, H // 2)
+    rain = np.concatenate([
+        label(add_ground(sample_optifine(sky("overcast_day"), d), d, (50, 66, 40)), "Rain (day)"),
+        label(add_ground(sample_optifine(sky("overcast_night"), d), d, (6, 8, 6)), "Rain (night)")], 1)
+    Image.fromarray(rain.astype(np.uint8)).save(PREVIEWS / "rain.png", optimize=True)
+
+    d = player_view(-90, -28, W, H)  # east, in the End
+    Image.fromarray(sample_optifine(sky("void_sky", "world1"), d).astype(np.uint8)).save(
+        PREVIEWS / "end_sky.png", optimize=True)
 
     faces = [np.array(Image.open(MC / f"textures/gui/title/background/panorama_{k}.png").convert("RGB"))
              for k in range(6)]
@@ -109,16 +155,14 @@ def main():
     edition = Image.open(MC / "textures/gui/title/edition.png")
     scale = 3  # GUI scale used for the mock-up (logo is 256 GUI px wide)
     lw = 256 * scale
-    logo_s = logo.resize((lw, lw // 4), Image.NEAREST)
-    lx, ly = (W - lw) // 2, 30 * scale // 2
-    title.alpha_composite(logo_s, (lx, ly))
-    ed = edition.resize((128 * scale, 16 * scale), Image.NEAREST)
-    title.alpha_composite(ed, (lx + 88 * scale, ly + 37 * scale))
+    lx, ly = (W - lw) // 2, 45
+    title.alpha_composite(logo.resize((lw, lw // 4), Image.NEAREST), (lx, ly))
+    title.alpha_composite(edition.resize((128 * scale, 16 * scale), Image.NEAREST), (lx + 88 * scale, ly + 37 * scale))
     draw = ImageDraw.Draw(title)
-    for i, label in enumerate(["Singleplayer", "Multiplayer", "Minecraft Realms"]):
+    for i, text in enumerate(["Singleplayer", "Multiplayer", "Minecraft Realms"]):
         bx, by = W // 2 - 150, 300 + i * 72
         draw.rectangle([bx, by, bx + 300, by + 54], fill=(40, 40, 48, 200), outline=(10, 10, 14, 255), width=3)
-        draw.text((bx + 150, by + 27), label, fill=(235, 235, 235, 255), font=font(24), anchor="mm")
+        draw.text((bx + 150, by + 27), text, fill=(235, 235, 235, 255), font=font(24), anchor="mm")
     splash = Image.new("RGBA", (520, 60), (0, 0, 0, 0))
     ImageDraw.Draw(splash).text((260, 30), "Don't look into the black hole!", fill=(255, 255, 0, 255),
                                 font=font(26), anchor="mm")
@@ -127,12 +171,11 @@ def main():
     title.convert("RGB").save(PREVIEWS / "title_screen.png", optimize=True)
 
     sun = Image.open(MC / "textures/environment/sun.png").convert("RGBA")
-    over = Image.new("RGBA", sun.size, (90, 140, 230, 255))  # daytime sky colour behind it
-    rgb = np.array(sun).astype(np.float64)
-    add = rgb[..., :3] * rgb[..., 3:] / 255
-    day = np.clip(np.array(over)[..., :3] + add, 0, 255).astype(np.uint8)
-    night = np.clip(add, 0, 255).astype(np.uint8)
-    Image.fromarray(np.concatenate([day, night], 1)).save(PREVIEWS / "vanilla_sun.png", optimize=True)
+    rgba = np.array(sun).astype(np.float64)
+    add = rgba[..., :3] * rgba[..., 3:] / 255
+    day_bg = np.clip(np.array([90, 140, 230]) + add, 0, 255).astype(np.uint8)
+    night_bg = np.clip(add, 0, 255).astype(np.uint8)
+    Image.fromarray(np.concatenate([day_bg, night_bg], 1)).save(PREVIEWS / "vanilla_sun.png", optimize=True)
     print("previews written to", PREVIEWS)
 
 

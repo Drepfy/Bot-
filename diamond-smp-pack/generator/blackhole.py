@@ -1,13 +1,24 @@
-"""Schwarzschild black hole ray tracer used to paint the Diamond SMP skies.
+"""Physically based Schwarzschild black hole renderer for the Diamond SMP skies.
 
-Units: the Schwarzschild radius is 1. Light rays are traced backwards from the
-observer with the classic "pseudo-Newtonian" form of the null geodesic,
+Units: the Schwarzschild radius is 1 (so M = 0.5). Light rays are traced
+backwards from the camera with the exact null-geodesic orbit equation written
+in Cartesian form,
 
     d2x/dl2 = -1.5 * h^2 * x / r^5,      h = |x cross v|
 
-which reproduces the exact Schwarzschild photon orbits (lensing, photon ring,
-the shadow). Every ray picks up light from a thin, turbulent, Doppler-beamed
-accretion disk, a faint glowing haze around it, and finally the starfield.
+which gives the true shadow size, the photon ring and every lensed image of
+the disk. The accretion disk is a thin, optically thick Novikov-Thorne disk:
+
+* each ring glows as a blackbody at T(r) ~ r^-3/4 (1 - sqrt(r_in/r))^1/4,
+* the observed colour is the blackbody at g*T, where g is the exact redshift
+  for gas on circular geodesic orbits (relativistic Doppler + gravitational
+  redshift), so the approaching side is bluer and brighter,
+* surfaces are limb-darkened (Chandrasekhar's electron-scattering law),
+* blackbody colours are integrated against the CIE 1931 observer.
+
+The background is a synthetic but realistic galaxy: stars with real
+magnitude/colour statistics and a Milky Way band with a bulge, star clouds,
+dark dust lanes and emission nebulae. It is lensed by the hole as well.
 """
 
 import math
@@ -43,28 +54,90 @@ def mc_direction(yaw, pitch):
     return np.array([-math.sin(y) * math.cos(p), -math.sin(p), math.cos(y) * math.cos(p)])
 
 
+def world_to_scene(target_dir, up=(0.0, 1.0, 0.0)):
+    """Rotation that maps world directions so that `target_dir` becomes +z."""
+    f = normalize(target_dir)
+    r = normalize(np.cross(f, up))
+    u = np.cross(r, f)
+    # scene basis: forward (0,0,1), up (0,1,0), right = f x u = (-1,0,0)
+    return np.stack([-r, u, f])  # rows: scene x, y, z expressed in world coords
+
+
 # ---------------------------------------------------------------------------
-# Cube map helpers (used for the background starfield)
-# Face order: +x, -x, +y, -y, +z, -z  (OpenGL convention)
+# Colour science
+# ---------------------------------------------------------------------------
+
+XYZ_TO_SRGB = np.array([
+    [3.2406, -1.5372, -0.4986],
+    [-0.9689, 1.8758, 0.0415],
+    [0.0557, -0.2040, 1.0570],
+])
+LUMA = np.array([0.2126, 0.7152, 0.0722])
+
+
+def _cie_cmf(lam):
+    """CIE 1931 2-degree colour matching functions (Wyman, Sloan & Shirley fit)."""
+    def g(mu, s1, s2):
+        s = np.where(lam < mu, s1, s2)
+        return np.exp(-0.5 * ((lam - mu) / s) ** 2)
+    x = 1.056 * g(599.8, 37.9, 31.0) + 0.362 * g(442.0, 16.0, 26.7) - 0.065 * g(501.1, 20.4, 26.2)
+    y = 0.821 * g(568.8, 46.9, 40.5) + 0.286 * g(530.9, 16.3, 31.1)
+    z = 1.217 * g(437.0, 11.8, 36.0) + 0.681 * g(459.0, 26.0, 13.8)
+    return np.stack([x, y, z], -1)
+
+
+def blackbody_lut(n=2048, t_min=600.0, t_max=1.0e6):
+    """Linear sRGB radiance of a blackbody vs temperature (6500 K has luminance 1)."""
+    lam = np.arange(380.0, 781.0, 2.0)
+    cmf = _cie_cmf(lam)
+    temps = np.geomspace(t_min, t_max, n)
+    lm = lam * 1e-9
+    with np.errstate(over="ignore"):
+        planck = 1.0 / (lm[None, :] ** 5 * np.expm1(1.4387769e-2 / (lm[None, :] * temps[:, None])))
+    xyz = planck @ cmf
+    rgb = np.clip(xyz @ XYZ_TO_SRGB.T, 0, None)
+    y6500 = np.interp(math.log(6500.0), np.log(temps), xyz[:, 1])
+    return np.ascontiguousarray(rgb / y6500), math.log(t_min), math.log(t_max)
+
+
+BB_LUT, BB_LO, BB_HI = blackbody_lut()
+
+
+def blackbody_colour(temp):
+    """Blackbody tint (luminance normalised to 1) for an array of temperatures."""
+    temp = np.asarray(temp, dtype=np.float64)
+    x = (np.log(np.clip(temp, 600, 1e6)) - BB_LO) / (BB_HI - BB_LO) * (len(BB_LUT) - 1)
+    i = np.clip(x.astype(int), 0, len(BB_LUT) - 2)
+    f = (x - i)[..., None]
+    rgb = BB_LUT[i] * (1 - f) + BB_LUT[i + 1] * f
+    return rgb / (rgb @ LUMA)[..., None]
+
+
+@njit(inline="always")
+def _bb(lut, lo, hi, temp):
+    n = lut.shape[0]
+    x = (math.log(max(temp, 1.0)) - lo) / (hi - lo) * (n - 1)
+    if x <= 0.0:
+        return lut[0, 0], lut[0, 1], lut[0, 2]
+    if x >= n - 1:
+        return lut[n - 1, 0], lut[n - 1, 1], lut[n - 1, 2]
+    i = int(x)
+    f = x - i
+    return (lut[i, 0] * (1 - f) + lut[i + 1, 0] * f,
+            lut[i, 1] * (1 - f) + lut[i + 1, 1] * f,
+            lut[i, 2] * (1 - f) + lut[i + 1, 2] * f)
+
+
+# ---------------------------------------------------------------------------
+# Cube map helpers (background galaxy). Face order: +x, -x, +y, -y, +z, -z
 # ---------------------------------------------------------------------------
 
 
 def cube_face_dirs(size, face):
     t = (np.arange(size) + 0.5) / size * 2 - 1
-    a, b = np.meshgrid(t, t)  # a across (u), b down (v)
+    a, b = np.meshgrid(t, t)
     one = np.ones_like(a)
-    if face == 0:
-        d = (one, -b, -a)
-    elif face == 1:
-        d = (-one, -b, a)
-    elif face == 2:
-        d = (a, one, b)
-    elif face == 3:
-        d = (a, -one, -b)
-    elif face == 4:
-        d = (a, -b, one)
-    else:
-        d = (-a, -b, -one)
+    d = [(one, -b, -a), (-one, -b, a), (a, one, b), (a, -one, -b), (a, -b, one), (-a, -b, -one)][face]
     d = np.stack(d, axis=-1)
     return d / np.linalg.norm(d, axis=-1, keepdims=True)
 
@@ -89,10 +162,8 @@ def _cube_coords(x, y, z):
 def _sample_cube(cube, x, y, z):
     face, a, b = _cube_coords(x, y, z)
     s = cube.shape[1]
-    fu = (a + 1) * 0.5 * s - 0.5
-    fv = (b + 1) * 0.5 * s - 0.5
-    fu = min(max(fu, 0.0), s - 1.001)
-    fv = min(max(fv, 0.0), s - 1.001)
+    fu = min(max((a + 1) * 0.5 * s - 0.5, 0.0), s - 1.001)
+    fv = min(max((b + 1) * 0.5 * s - 0.5, 0.0), s - 1.001)
     iu, iv = int(fu), int(fv)
     du, dv = fu - iu, fv - iv
     r = np.zeros(3)
@@ -166,89 +237,97 @@ def periodic_noise(h, w, seed, aniso=6.0, alpha=1.6):
 
 
 # ---------------------------------------------------------------------------
-# Starfield background
+# Background galaxy
 # ---------------------------------------------------------------------------
 
 
 @njit(parallel=True)
-def _nebula_kernel(dirs, band_n, neb_a, neb_b, seed, out):
-    n = dirs.shape[0]
-    for i in prange(n):
+def _galaxy_kernel(dirs, gn, gc, gs, seed, c_disk, c_bulge, c_young, out):
+    for i in prange(dirs.shape[0]):
         x, y, z = dirs[i, 0], dirs[i, 1], dirs[i, 2]
-        lat = x * band_n[0] + y * band_n[1] + z * band_n[2]
-        band = math.exp(-(lat / 0.22) ** 2)
-        wide = math.exp(-(lat / 0.55) ** 2)
-        n1 = fbm3(x * 2.2 + 11.0, y * 2.2, z * 2.2, 7, seed)
-        n2 = fbm3(x * 3.7, y * 3.7 + 5.0, z * 3.7, 6, seed + 101)
-        n3 = fbm3(x * 9.0, y * 9.0, z * 9.0 + 3.0, 5, seed + 333)
-        cloud = max(n1 - 0.38, 0.0) * 2.4
-        cloud = cloud * cloud * (0.35 + 0.65 * wide)
-        dust = max(n3 - 0.45, 0.0) * 3.0  # dark lanes inside the galactic band
-        glow = band * (0.5 + 0.8 * n2) * (1.0 - 0.75 * min(dust, 1.0))
-        mix = min(max(n2 * 1.6 - 0.3, 0.0), 1.0)
+        sb = x * gn[0] + y * gn[1] + z * gn[2]
+        b = math.asin(min(max(sb, -1.0), 1.0))
+        l = math.atan2(x * gs[0] + y * gs[1] + z * gs[2], x * gc[0] + y * gc[1] + z * gc[2])
+        warp = (fbm3(x * 2.0 + 3.1, y * 2.0, z * 2.0, 4, seed + 1) - 0.5) * 0.06
+        bb = b - warp
+        thick = 0.06 + 0.05 * fbm3(x * 3.0, y * 3.0 + 7.0, z * 3.0, 4, seed + 2)
+        disk = math.exp(-abs(bb) / thick) * (0.22 + 0.78 * math.exp(-(l / 1.25) ** 2))
+        halo = math.exp(-abs(bb) / 0.35) * 0.06
+        bulge = 1.7 * math.exp(-((l / 0.24) ** 2 + (bb / 0.16) ** 2))
+        clouds = fbm3(x * 7.0, y * 7.0, z * 7.0, 6, seed + 3)
+        clouds = 0.25 + 1.6 * clouds ** 2.4
+        young = max(fbm3(x * 5.0 + 9.0, y * 5.0, z * 5.0, 5, seed + 4) - 0.5, 0.0) * 2.0
+        # Dust: ridged noise concentrated in the mid-plane (the "Great Rift").
+        ridge = 1.0 - abs(2.0 * fbm3(x * 9.0 + 1.3, y * 9.0, z * 9.0 - 4.0, 6, seed + 5) - 1.0)
+        lane = math.exp(-(bb / (0.03 + 0.03 * fbm3(x * 4.0, y * 4.0, z * 4.0 + 2.0, 3, seed + 6))) ** 2)
+        tau = lane * (0.5 + 4.0 * max(ridge - 0.45, 0.0) ** 1.2)
+        tau += 0.6 * math.exp(-(bb / 0.012) ** 2)
+        neb = max(fbm3(x * 16.0, y * 16.0 - 3.0, z * 16.0, 5, seed + 8) - 0.64, 0.0) * 9.0
+        neb *= math.exp(-(bb / 0.05) ** 2)
         for c in range(3):
-            col = neb_a[c] * (1 - mix) + neb_b[c] * mix
-            out[i, c] = col * (cloud * 0.55 + glow * 0.35)
+            col = (c_disk[c] * disk * clouds * (1.0 - 0.6 * young) + c_young[c] * disk * clouds * young
+                   + c_bulge[c] * bulge * (0.55 + 0.6 * clouds) + c_disk[c] * halo)
+            redden = (1.25, 1.0, 0.75)[c]  # dust dims blue light most
+            col *= math.exp(-tau / redden)
+            col += neb * (0.95, 0.22, 0.30)[c] * math.exp(-0.5 * tau)  # H-alpha pink
+            out[i, c] = col
 
 
 @njit
-def _splat_stars(cube, sdirs, scol, ssize):
+def _splat_stars(cube, sdirs, scol, sigma):
     s = cube.shape[1]
+    norm = 1.0 / (2.0 * math.pi * sigma * sigma)
+    rad = int(math.ceil(sigma * 3.5))
     for k in range(sdirs.shape[0]):
         face, a, b = _cube_coords(sdirs[k, 0], sdirs[k, 1], sdirs[k, 2])
         fu = (a + 1) * 0.5 * s - 0.5
         fv = (b + 1) * 0.5 * s - 0.5
-        sig = ssize[k]
-        rad = int(math.ceil(sig * 3.5))
         cu, cv = int(round(fu)), int(round(fv))
         for dv in range(-rad, rad + 1):
             for du in range(-rad, rad + 1):
                 u, v = cu + du, cv + dv
                 if u < 0 or v < 0 or u >= s or v >= s:
                     continue
-                d2 = (u - fu) ** 2 + (v - fv) ** 2
-                w = math.exp(-d2 / (2 * sig * sig))
+                w = norm * math.exp(-((u - fu) ** 2 + (v - fv) ** 2) / (2 * sigma * sigma))
                 for c in range(3):
                     cube[face, v, u, c] += scol[k, c] * w
 
 
-def star_colour(temp):
-    """Rough blackbody tint for a star temperature in kelvin (linear RGB)."""
-    t = np.clip(temp, 2500, 30000) / 100.0
-    hot = np.maximum(t - 60, 1e-6)
-    r = np.where(t <= 66, 1.0, np.clip(1.292936 * hot ** -0.1332, 0, 1))
-    g = np.where(t <= 66, np.clip(0.390082 * np.log(t) - 0.631841, 0, 1),
-                 np.clip(1.129891 * hot ** -0.0755, 0, 1))
-    b = np.where(t >= 66, 1.0, np.clip(0.543207 * np.log(np.maximum(t - 10, 1e-6)) - 1.196254, 0, 1))
-    rgb = np.stack([r, g, b], -1) ** 2.2  # to linear
-    return rgb / rgb.max(axis=-1, keepdims=True)
-
-
-def make_starfield(size, seed, neb_a, neb_b, band_normal, n_stars=90000, star_gain=1.0):
+def make_galaxy(size, seed, galactic_north, galactic_centre, n_stars=200000,
+                diffuse=0.012, star_flux=0.35, mag_range=(-1.5, 12.5)):
+    """Cube map of a realistic night sky (linear radiance, scene frame)."""
     rng = np.random.default_rng(seed)
-    cube = np.zeros((6, size, size, 3), dtype=np.float64)
-    band_n = normalize(band_normal)
+    gn = normalize(galactic_north)
+    gc = normalize(np.asarray(galactic_centre, float) - gn * (np.dot(galactic_centre, gn)))
+    gs = np.cross(gn, gc)
+    c_disk = blackbody_colour(5400.0)
+    c_bulge = blackbody_colour(4300.0)
+    c_young = blackbody_colour(11000.0)
+    cube = np.zeros((6, size, size, 3))
     for f in range(6):
         d = cube_face_dirs(size, f).reshape(-1, 3)
         out = np.zeros((d.shape[0], 3))
-        _nebula_kernel(d, band_n, np.asarray(neb_a, float), np.asarray(neb_b, float), seed, out)
-        cube[f] = out.reshape(size, size, 3)
+        _galaxy_kernel(d, gn, gc, gs, seed, c_disk, c_bulge, c_young, out)
+        cube[f] = out.reshape(size, size, 3) * diffuse
 
-    # Uniform stars plus a dense population hugging the galactic band.
-    n_band = n_stars
-    d1 = normalize(rng.standard_normal((n_stars, 3)))
-    d2 = normalize(rng.standard_normal((n_band, 3)))
-    lat = d2 @ band_n
-    d2 = normalize(d2 - np.outer(lat * (1 - rng.uniform(0.0, 0.25, n_band)), band_n))
-    dirs = np.concatenate([d1, d2])
-    n = dirs.shape[0]
-    mag = rng.pareto(1.7, n) + 1.0  # few bright, many faint
-    bright = np.clip(0.015 * mag ** 1.6, 0, 6.0) * star_gain
-    temp = rng.choice([3200, 4500, 5800, 7500, 10000, 15000, 25000], n,
-                      p=[0.12, 0.16, 0.2, 0.18, 0.16, 0.1, 0.08])
-    col = star_colour(temp + rng.normal(0, 400, n)) * bright[:, None]
-    sizes = np.clip(0.55 + 0.18 * np.log1p(bright * 4), 0.55, 1.6) * size / 1024
-    _splat_stars(cube, dirs, col, sizes)
+    # Star counts grow ~10^(0.33 m) per magnitude; faint stars hug the galactic plane.
+    m_lo, m_hi = mag_range
+    a = 0.33
+    n_try = int(n_stars * 2.2)
+    u = rng.uniform(size=n_try)
+    mag = np.log10(10 ** (a * m_lo) + u * (10 ** (a * m_hi) - 10 ** (a * m_lo))) / a
+    dirs = normalize(rng.standard_normal((n_try, 3)))
+    lat = np.abs(dirs @ gn)
+    keep_p = np.where(mag < 5.5, 1.0, 0.2 + 0.8 * np.exp(-lat / 0.18))
+    keep = rng.uniform(size=n_try) < keep_p
+    dirs, mag = dirs[keep][:n_stars], mag[keep][:n_stars]
+    n = len(mag)
+    classes = np.array([3300, 4500, 5600, 6600, 8500, 15000, 28000], float)
+    probs = np.array([0.24, 0.30, 0.16, 0.12, 0.10, 0.06, 0.02])
+    temp = rng.choice(classes, n, p=probs) * rng.uniform(0.9, 1.1, n)
+    flux = 10 ** (-0.4 * mag) * star_flux
+    col = blackbody_colour(temp) * flux[:, None]
+    _splat_stars(cube, dirs, col, 0.75 * size / 1024)
     return cube
 
 
@@ -256,20 +335,8 @@ def make_starfield(size, seed, neb_a, neb_b, band_normal, n_stars=90000, star_ga
 # The ray tracer
 # ---------------------------------------------------------------------------
 
-# Indices into the parameter vector handed to the kernel.
-P_RIN, P_ROUT, P_STEPK, P_DTMAX, P_RESC, P_MAXSTEP, P_DISKI, P_DISKA, P_TWIST, \
-    P_HAZE, P_RING, P_DOPP, P_TEMP, P_TMAXIN, P_HAZET = range(15)
-
-
-@njit(inline="always")
-def _palette(pal, t):
-    k = pal.shape[0]
-    x = min(max(t, 0.0), 1.0) * (k - 1)
-    i = min(int(x), k - 2)
-    f = x - i
-    return (pal[i, 0] * (1 - f) + pal[i + 1, 0] * f,
-            pal[i, 1] * (1 - f) + pal[i + 1, 1] * f,
-            pal[i, 2] * (1 - f) + pal[i + 1, 2] * f)
+P_RIN, P_ROUT, P_STEPK, P_DTMAX, P_RESC, P_MAXSTEP, P_TMAX, P_TAU, P_TWIST, P_EMIS, P_TURB = range(11)
+F_PEAK = (36 / 49) ** 0.75 * (1 / 7) ** 0.25  # peak of the Novikov-Thorne profile (r = 49/36 r_in)
 
 
 @njit(inline="always")
@@ -291,38 +358,36 @@ def _accel(x, y, z, h2):
     return f * x, f * y, f * z
 
 
-@njit(inline="always")
-def _doppler(px, py, pz, r, nx, ny, nz, kx, ky, kz):
-    """Redshift factor g for disk gas orbiting the normal n, seen along k."""
-    wx, wy, wz = ny * pz - nz * py, nz * px - nx * pz, nx * py - ny * px
-    wl = math.sqrt(wx * wx + wy * wy + wz * wz) + 1e-12
-    beta = math.sqrt(0.5 / max(r - 1.0, 0.5))
-    beta = min(beta, 0.9)
-    cos_t = (wx * kx + wy * ky + wz * kz) / wl
-    gam = 1.0 / math.sqrt(1 - beta * beta)
-    return math.sqrt(max(1 - 1.0 / r, 0.0)) / (gam * (1 - beta * cos_t))
-
-
 @njit(parallel=True, fastmath=True)
-def trace(dirs, obs, nrm, e1, e2, prm, pal, noise, bg, use_bg, out):
-    """Trace each direction in `dirs` from `obs`; writes RGB + shadow coverage."""
+def trace(dirs, obs, nrm, e1, e2, prm, lut, lut_lo, lut_hi, noise, bg, use_bg, out):
+    """Trace each direction from `obs`.
+
+    out[:, 0:3] disk light, out[:, 3:6] lensed background light,
+    out[:, 6] how much of the pixel is the black shadow.
+    """
     r_in, r_out = prm[P_RIN], prm[P_ROUT]
     step_k, dt_max, r_esc = prm[P_STEPK], prm[P_DTMAX], prm[P_RESC]
     max_steps = int(prm[P_MAXSTEP])
     lr_in, lr_out = math.log(r_in), math.log(r_out)
     nx, ny, nz = nrm[0], nrm[1], nrm[2]
+    r0 = math.sqrt(obs[0] ** 2 + obs[1] ** 2 + obs[2] ** 2)
     for i in prange(dirs.shape[0]):
         x, y, z = obs[0], obs[1], obs[2]
         vx, vy, vz = dirs[i, 0], dirs[i, 1], dirs[i, 2]
-        cx, cy, cz = y * vz - z * vy, z * vx - x * vz, x * vy - y * vx
-        h2 = cx * cx + cy * cy + cz * cz
+        lx, ly, lz = y * vz - z * vy, z * vx - x * vz, x * vy - y * vx
+        h2 = lx * lx + ly * ly + lz * lz
+        h = math.sqrt(h2)
+        lam = 0.0  # photon angular momentum about the disk axis (E = 1)
+        if h > 1e-12:
+            b = h / math.sqrt(max(1.0 - h2 / (r0 * r0 * r0), 1e-6))
+            lam = -(lx * nx + ly * ny + lz * nz) / h * b
         trans = 1.0
-        cr, cg, cb = 0.0, 0.0, 0.0
+        er, eg, eb = 0.0, 0.0, 0.0
         shadow = 0.0
+        escaped = False
         for _ in range(max_steps):
             r = math.sqrt(x * x + y * y + z * z)
             dt = min(step_k * r * (0.6 + 0.4 * min(r / 3.0, 1.0)), dt_max)
-            # RK4
             a1x, a1y, a1z = _accel(x, y, z, h2)
             a2x, a2y, a2z = _accel(x + 0.5 * dt * vx, y + 0.5 * dt * vy, z + 0.5 * dt * vz, h2)
             b2x, b2y, b2z = vx + 0.5 * dt * a1x, vy + 0.5 * dt * a1y, vz + 0.5 * dt * a1z
@@ -336,34 +401,15 @@ def trace(dirs, obs, nrm, e1, e2, prm, pal, noise, bg, use_bg, out):
             vx += dt / 6 * (a1x + 2 * a2x + 2 * a3x + a4x)
             vy += dt / 6 * (a1y + 2 * a2y + 2 * a3y + a4y)
             vz += dt / 6 * (a1z + 2 * a2z + 2 * a3z + a4z)
-
-            vl = math.sqrt(vx * vx + vy * vy + vz * vz)
-            kx, ky, kz = -vx / vl, -vy / vl, -vz / vl  # photon heading to the camera
             rq = math.sqrt(qx * qx + qy * qy + qz * qz)
 
-            # --- volumetric haze around the disk and the photon sphere ---
-            hgt = qx * nx + qy * ny + qz * nz
-            if prm[P_HAZE] > 0 and rq > 1.0 and rq < r_out * 1.6:
-                thick = 0.10 * rq + 0.15
-                rr = rq / r_in
-                prof = rr ** -2.0 * (1 - 1 / math.sqrt(max(rr, 1.0))) * 4.0 + 0.04 * math.exp(-rq / r_out)
-                haze = prm[P_HAZE] * prof * math.exp(-(hgt / thick) ** 2)
-                if haze > 1e-5:
-                    g = _doppler(qx, qy, qz, max(rq, 1.01), nx, ny, nz, kx, ky, kz)
-                    pr, pg, pb = _palette(pal, prm[P_HAZET] * g)
-                    w = trans * haze * dt * g ** 2
-                    cr += w * pr
-                    cg += w * pg
-                    cb += w * pb
-
-            # --- thin disk crossing ---
             s0 = x * nx + y * ny + z * nz
-            s1 = hgt
+            s1 = qx * nx + qy * ny + qz * nz
             if s0 * s1 < 0.0:
                 f = s0 / (s0 - s1)
                 px, py, pz = x + f * (qx - x), y + f * (qy - y), z + f * (qz - z)
                 rp = math.sqrt(px * px + py * py + pz * pz)
-                if rp > r_in * 0.92 and rp < r_out:
+                if rp > r_in * 0.95 and rp < r_out:
                     phi = math.atan2(px * e2[0] + py * e2[1] + pz * e2[2],
                                      px * e1[0] + py * e1[1] + pz * e1[2])
                     lr = math.log(rp)
@@ -371,121 +417,145 @@ def trace(dirs, obs, nrm, e1, e2, prm, pal, noise, bg, use_bg, out):
                     u = phi / (2 * math.pi)
                     n1 = _noise2(noise, u + prm[P_TWIST] * lr, v)
                     n2 = _noise2(noise, 2.0 * u - 1.7 * prm[P_TWIST] * lr + 0.37, v * 2.3 + 0.21)
-                    turb = 0.25 + 1.25 * n1 ** 1.6 * (0.55 + 0.9 * n2)
                     xr = rp / r_in
-                    prof = (1.0 - 1.0 / math.sqrt(max(xr, 1.0))) * xr ** -2.2 * 9.5 + 0.03
-                    edge_in = min(max((rp - r_in * 0.92) / (r_in * 0.12), 0.0), 1.0)
-                    t_out = min(max((r_out - rp) / (r_out * 0.45), 0.0), 1.0)
+                    ft = 0.0
+                    if xr > 1.0:
+                        ft = xr ** -0.75 * (1.0 - xr ** -0.5) ** 0.25 / F_PEAK
+                    ft = max(ft, 0.18 * min(max((rp - r_in * 0.95) / (r_in * 0.05), 0.0), 1.0))
+                    temp = prm[P_TMAX] * ft * (1.0 + prm[P_TURB] * (n2 - 0.5))
+                    edge_in = min(max((rp - r_in * 0.95) / (r_in * 0.08), 0.0), 1.0)
+                    t_out = min(max((r_out - rp) / (r_out * 0.4), 0.0), 1.0)
                     edge_out = t_out * t_out * (3 - 2 * t_out)
-                    dens = prof * turb * edge_in * edge_out
-                    alpha = 1.0 - math.exp(-prm[P_DISKA] * dens * (0.6 + 0.4 * edge_out))
-                    g = _doppler(px, py, pz, rp, nx, ny, nz, kx, ky, kz)
-                    temp = prm[P_TEMP] * (prof ** 0.28) * (0.75 + 0.45 * n2) * g
-                    temp = min(temp, prm[P_TMAXIN] + 0.4)
-                    pr, pg, pb = _palette(pal, temp)
-                    inten = prm[P_DISKI] * (0.25 + dens) * g ** prm[P_DOPP]
-                    w = trans * alpha * inten
-                    cr += w * pr
-                    cg += w * pg
-                    cb += w * pb
-                    trans *= 1.0 - alpha
+                    tau = prm[P_TAU] * (0.25 + 1.5 * n1) * edge_out ** 1.5 * edge_in
+                    alpha = 1.0 - math.exp(-tau)
+                    if alpha > 1e-4:
+                        om = math.sqrt(0.5 / (rp * rp * rp))
+                        g = math.sqrt(max(1.0 - 1.5 / rp, 1e-4)) / max(1.0 - om * lam, 1e-3)
+                        vl = math.sqrt(vx * vx + vy * vy + vz * vz)
+                        mu = abs(vx * nx + vy * ny + vz * nz) / vl
+                        limb = (1.0 + 2.06 * mu) / 2.03
+                        br, bgr, bbl = _bb(lut, lut_lo, lut_hi, g * temp)
+                        w = trans * alpha * prm[P_EMIS] * (0.55 + 0.9 * n1 ** 1.5) * limb
+                        er += w * br
+                        eg += w * bgr
+                        eb += w * bbl
+                        trans *= 1.0 - alpha
 
             x, y, z = qx, qy, qz
             if rq < 1.0:
                 shadow = trans
                 trans = 0.0
                 break
-            if trans < 0.003:
+            if trans < 0.002:
                 break
             if rq > r_esc and (x * vx + y * vy + z * vz) > 0:
+                escaped = True
                 break
-        else:
-            shadow = trans  # spiralled forever around the photon sphere
-            trans = 0.0
-        if trans > 0.0 and prm[P_RING] > 0:
-            # Photon ring: light skimming the photon sphere (impact parameter
-            # just above the critical 3*sqrt(3)/2) piles up into a thin halo.
-            db = math.sqrt(h2) - 2.598
-            if db > 0.0:
-                ring = prm[P_RING] * (math.exp(-db / 0.05) + 0.2 * math.exp(-db / 0.4))
-                pr, pg, pb = _palette(pal, 0.74)
-                cr += trans * ring * pr
-                cg += trans * ring * pg
-                cb += trans * ring * pb
-        if trans > 0.0 and use_bg:
+        out[i, 0] = er
+        out[i, 1] = eg
+        out[i, 2] = eb
+        if escaped and use_bg:
             vl = math.sqrt(vx * vx + vy * vy + vz * vz)
             s = _sample_cube(bg, vx / vl, vy / vl, vz / vl)
-            cr += trans * s[0]
-            cg += trans * s[1]
-            cb += trans * s[2]
-        out[i, 0] = cr
-        out[i, 1] = cg
-        out[i, 2] = cb
-        out[i, 3] = shadow
+            out[i, 3] = trans * s[0]
+            out[i, 4] = trans * s[1]
+            out[i, 5] = trans * s[2]
+        else:
+            out[i, 3] = 0.0
+            out[i, 4] = 0.0
+            out[i, 5] = 0.0
+        if not escaped and shadow == 0.0 and trans > 0.002:
+            shadow = trans  # orbited the photon sphere until the step budget ran out
+        out[i, 6] = shadow
 
 
 class BlackHoleScene:
-    """A black hole seen from `distance`, with its disk tilted `inclination`
-    degrees towards the camera and rolled `roll` degrees on screen."""
+    """A black hole seen from `distance`, its disk tilted `inclination` degrees
+    towards the camera and rolled `roll` degrees on screen."""
 
-    def __init__(self, palette, distance=26.0, inclination=8.0, roll=-12.0,
-                 r_in=3.0, r_out=13.0, background=None, seed=7, **kw):
+    def __init__(self, distance=22.0, inclination=10.0, roll=-14.0, r_in=3.0, r_out=13.0,
+                 background=None, seed=7, t_max=22000.0, opacity=5.0, emission=1.0,
+                 turbulence=0.14, twist=0.55, step_k=0.03, max_steps=3000):
         self.obs = np.array([0.0, 0.0, -distance])
         i = math.radians(inclination)
-        n = np.array([0.0, math.cos(i), -math.sin(i)])
-        n = rot(roll, (0, 0, 1)) @ n
+        n = rot(roll, (0, 0, 1)) @ np.array([0.0, math.cos(i), -math.sin(i)])
         self.nrm = normalize(n)
-        e1 = np.cross(self.nrm, [0.0, 0.0, 1.0])
-        if np.linalg.norm(e1) < 1e-6:
-            e1 = np.cross(self.nrm, [1.0, 0.0, 0.0])
-        self.e1 = normalize(e1)
+        self.e1 = normalize(np.cross(self.nrm, [0.0, 0.0, 1.0]))
         self.e2 = np.cross(self.nrm, self.e1)
-        prm = np.zeros(15)
+        prm = np.zeros(11)
         prm[P_RIN], prm[P_ROUT] = r_in, r_out
-        prm[P_STEPK] = kw.get("step_k", 0.035)
-        prm[P_DTMAX] = kw.get("dt_max", 4.0)
-        prm[P_RESC] = kw.get("r_esc", max(4 * distance, 120.0))
-        prm[P_MAXSTEP] = kw.get("max_steps", 3000)
-        prm[P_DISKI] = kw.get("disk_intensity", 1.6)
-        prm[P_DISKA] = kw.get("disk_opacity", 2.2)
-        prm[P_TWIST] = kw.get("twist", 0.55)
-        prm[P_HAZE] = kw.get("haze", 0.05)
-        prm[P_RING] = kw.get("ring", 0.35)
-        prm[P_DOPP] = kw.get("doppler_power", 3.0)
-        prm[P_TEMP] = kw.get("temperature", 0.92)
-        prm[P_TMAXIN] = kw.get("temp_max", 1.0)
-        prm[P_HAZET] = kw.get("haze_temp", 0.55)
+        prm[P_STEPK], prm[P_DTMAX] = step_k, 4.0
+        prm[P_RESC] = max(4 * distance, 120.0)
+        prm[P_MAXSTEP] = max_steps
+        prm[P_TMAX], prm[P_TAU], prm[P_TWIST] = t_max, opacity, twist
+        prm[P_EMIS], prm[P_TURB] = emission, turbulence
         self.prm = prm
-        self.pal = np.ascontiguousarray(palette, dtype=np.float64)
         self.noise = periodic_noise(512, 2048, seed)
         self.bg = background if background is not None else np.zeros((6, 2, 2, 3))
         self.use_bg = background is not None
 
     def render(self, dirs, batch=1 << 20):
-        """dirs: (..., 3) unit vectors in scene space (camera looks along +z)."""
+        """dirs: (..., 3) unit vectors in scene space (camera looks along +z).
+
+        Returns (..., 7): disk RGB, background RGB, shadow coverage."""
         shape = dirs.shape[:-1]
         flat = np.ascontiguousarray(dirs.reshape(-1, 3), dtype=np.float64)
-        out = np.zeros((flat.shape[0], 4))
+        out = np.zeros((flat.shape[0], 7))
         for s in range(0, flat.shape[0], batch):
             trace(flat[s:s + batch], self.obs, self.nrm, self.e1, self.e2, self.prm,
-                  self.pal, self.noise, self.bg, self.use_bg, out[s:s + batch])
-        return out.reshape(*shape, 4)
+                  BB_LUT, BB_LO, BB_HI, self.noise, self.bg, self.use_bg, out[s:s + batch])
+        return out.reshape(*shape, 7)
 
 
-def world_to_scene(target_dir, up=(0.0, 1.0, 0.0)):
-    """Rotation that maps world directions so that `target_dir` becomes +z."""
-    f = normalize(target_dir)
-    r = normalize(np.cross(f, up))
-    u = np.cross(r, f)
-    # scene basis: forward (0,0,1), up (0,1,0), right = f x u = (-1,0,0)
-    return np.stack([-r, u, f])  # rows: scene x, y, z expressed in world coords
+# ---------------------------------------------------------------------------
+# Optics: glare (bloom) and tone mapping
+# ---------------------------------------------------------------------------
+
+GLARE = ((1.2, 0.030), (4.0, 0.018), (14.0, 0.010), (42.0, 0.007))
 
 
-def tonemap(rgb, exposure=1.0, dither_seed=None):
-    """Filmic-ish tonemap from linear HDR to 8-bit sRGB."""
-    x = 1.0 - np.exp(-np.maximum(rgb, 0) * exposure)
-    srgb = np.where(x <= 0.0031308, 12.92 * x, 1.055 * np.power(x, 1 / 2.4) - 0.055)
-    srgb = srgb * 255.0
+def glare(img, comps=GLARE, scale=1.0):
+    """Lens/eye glare: convolve linear HDR with a sum of Gaussians (sigma in px)."""
+    h, w = img.shape[:2]
+    fy = np.fft.fftfreq(h)[:, None]
+    fx = np.fft.rfftfreq(w)[None, :]
+    f2 = fy * fy + fx * fx
+    kern = sum(wt * np.exp(-2 * math.pi ** 2 * (s * scale) ** 2 * f2) for s, wt in comps)
+    total = sum(wt for _, wt in comps)
+    spec = np.fft.rfft2(img, axes=(0, 1)) * kern[..., None]
+    return img * (1 - total) + np.fft.irfft2(spec, s=(h, w), axes=(0, 1))
+
+
+def srgb_encode(x):
+    x = np.clip(x, 0, 1)
+    return np.where(x <= 0.0031308, 12.92 * x, 1.055 * np.power(x, 1 / 2.4) - 0.055)
+
+
+def quantize(srgb, dither_seed=None):
+    v = srgb * 255.0
     if dither_seed is not None:
-        srgb += np.random.default_rng(dither_seed).uniform(-0.5, 0.5, srgb.shape)
-    return np.clip(np.round(srgb), 0, 255).astype(np.uint8)
+        v = v + np.random.default_rng(dither_seed).uniform(-0.5, 0.5, v.shape)
+    return np.clip(np.round(v), 0, 255).astype(np.uint8)
+
+
+def _shoulder(rgb):
+    """Film-like highlight roll-off: over-exposed colours bleach towards white."""
+    m = rgb.max(-1, keepdims=True)
+    over = np.clip(m - 1.0, 0, None)
+    base = rgb / np.maximum(m, 1.0)
+    k = 1.0 - np.exp(-over * 1.5)
+    return base + (1.0 - base) * k
+
+
+def tonemap_astro(rgb, soft=0.02, white=6.0, dither_seed=None):
+    """Asinh stretch (the standard for astrophotography) on luminance."""
+    lum = np.maximum(rgb @ LUMA, 1e-9)
+    stretched = np.arcsinh(lum / soft) / np.arcsinh(white / soft)
+    out = _shoulder(rgb * (stretched / lum)[..., None])
+    return quantize(srgb_encode(out), dither_seed)
+
+
+def tonemap_film(rgb, exposure=1.0, dither_seed=None):
+    """Simple filmic curve for daylight scenes."""
+    x = 1.0 - np.exp(-np.maximum(rgb, 0) * exposure)
+    return quantize(srgb_encode(x), dither_seed)
