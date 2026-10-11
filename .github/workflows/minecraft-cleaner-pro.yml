@@ -33,6 +33,18 @@ jobs:
         with:
           global-json-file: MinecraftCleanerPro/global.json
 
+      # The symbolic-link tests return early when the account may not create links; record which case applies.
+      - name: Report symbolic link permission
+        run: |
+          $target = Join-Path $env:RUNNER_TEMP 'symlink-target.txt'
+          Set-Content -Path $target -Value 'probe'
+          try {
+            New-Item -ItemType SymbolicLink -Path (Join-Path $env:RUNNER_TEMP 'symlink-probe.txt') -Target $target -ErrorAction Stop | Out-Null
+            'Symbolic links: allowed (symbolic-link tests execute fully)'
+          } catch {
+            "Symbolic links: NOT allowed (symbolic-link tests return early): $($_.Exception.Message)"
+          }
+
       - name: Build, test, publish, self-test and UI smoke test
         run: ./scripts/build.ps1 -SmokeUi
 

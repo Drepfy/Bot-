@@ -1,0 +1,118 @@
+# Test results
+
+This file records which verifications actually ran, where, and with what result. Nothing here is projected or
+assumed; anything that was **not** verified is listed under [Not verified](#not-verified).
+
+## Environments
+
+| Environment | Details | Used for |
+|---|---|---|
+| Linux (development container) | Ubuntu 24.04.5, .NET SDK 10.0.112 | build, all platform-independent tests, publishing, reproducibility check, vulnerability audit |
+| Wine 9.0 on the same Linux machine (headless, Xvfb) | reports itself as Windows NT 10.0.19043, .NET 10.0.12 runtime from the self-contained exe | `--self-test` of the published executable |
+| GitHub Actions `windows-latest` | Windows NT 10.0.26100, SDK from `global.json` | build, **all** tests incl. Windows-only ones, publish, `--self-test`, `--smoke-ui` (real WPF rendering) |
+
+## Automated test suite
+
+204 tests in five projects. Runs on 2026-10-11:
+
+| Project | Tests | Linux (latest commit) | Windows CI run 2 |
+|---|---|---|---|
+| CleanerPro.Core.Tests | 63 | 62 passed, 1 skipped | 63 passed |
+| CleanerPro.Detection.Tests | 67 | 67 passed | 67 passed |
+| CleanerPro.Scanner.Tests | 45 | 45 passed | 45 passed |
+| CleanerPro.Quarantine.Tests | 19 | 19 passed | 19 passed |
+| CleanerPro.Integration.Tests | 10 | 10 passed | 10 passed |
+| **Total** | **204** | **203 passed, 1 skipped, 0 failed** | **204 passed, 0 failed** |
+
+- The test skipped on Linux is `WindowsSystemFolderIsProtectedOnRealSystem` (`[WindowsFact]`); it needs a real
+  Windows system folder and passed on Windows.
+- Six tests that need symbolic links (`PathSafetyPolicyTests`, `EnumerationAndDiscoveryTests`,
+  `QuarantineServiceTests`) **return early and count as passed** when the account is not allowed to create
+  links (Windows without Developer Mode or administrator rights). On Linux they executed fully. The CI
+  workflow logs whether links were allowed on the runner ("Report symbolic link permission" step).
+- No test uses real malware or a real cheat client. Detection tests use synthetic jars and synthetic class
+  files that reproduce only the documented byte patterns (`tests/Shared/TestHelpers.cs`).
+
+Coverage by area: path safety (protected roots, device/UNC/ADS/trailing-dot/8.3/reserved names, relative
+segments, symbolic links); configuration (defaults, validation, unknown keys, wrong types, migration, backup,
+invalid JSON, newer versions, export, reload); rule database loading and validation; indicator matching,
+conditions and classification including conflicting and legitimacy evidence; class-file parsing and the
+three fractureiser bytecode signatures; signed rule updates (valid, tampered, expired, rollback, untrusted
+or missing key, size limit, offline) through an in-memory HTTP handler; archive inspection (nested jars,
+compression-ratio, entry-count, size and nesting limits, corrupt archives, metadata parsing); safe
+enumeration; discovery for the official launcher, Prism, Modrinth, CurseForge, Lunar Client and custom folders; the scan
+engine (cancellation, pause, cache, memory budget, size limits, overlapping roots, files never modified);
+quarantine (integrity, interrupted operations, simulated disk-full, files changed since the scan, restore
+without overwrite, deletion confirmations); reports and redaction; history; logging; end-to-end flows.
+
+## Published executable
+
+### Self-test (`--self-test`)
+
+The nine steps in `src/CleanerPro.App/Composition/SelfTest.cs` run against harmless fixtures in a temporary
+data root: configuration created and valid; bundled rules loaded; fixtures created; scan detects the fixtures
+with evidence; quarantine with integrity verification; restore returns identical content; protected system
+paths cannot be targeted (`C:\Windows\System32\drivers\etc\hosts`); HTML/TXT/JSON reports; offline by
+default with no network activity.
+
+| Where | Executable | Result |
+|---|---|---|
+| Wine 9.0 | folder publish | 9/9 passed |
+| Wine 9.0 | compressed self-contained single file | 9/9 passed |
+| Windows CI run 2 | compressed self-contained single file | 9/9 passed |
+
+### UI smoke test (`--smoke-ui`)
+
+Opens the main window and navigates to every page (Dashboard, Installations, Scanner, Findings, Quarantine,
+History, Configuration, Privacy & Updates, About), failing on any unhandled exception (for example a missing
+resource or invalid XAML). WPF data-binding errors are not exceptions and are not detected by this test.
+
+| Where | Result |
+|---|---|
+| Windows CI run 2 | all 9 pages rendered, log ends with `SMOKE-UI: OK` |
+| Wine 9.0 | **not possible**: WPF terminates inside its font-fallback code under this Wine build, also for a minimal one-window WPF program with no application code, so this is an environment limitation, not an application error |
+
+## Windows CI runs
+
+| Run | Commit | Result |
+|---|---|---|
+| [1](https://github.com/Drepfy/Bot-/actions/runs/38164308767) | `d4c8c07` | **Failed**: `UnchangedCleanFilesAreReusedOnTheNextScan`. The scan cache stored its path keys through a camelCase dictionary-key policy, so `C:\USERS\…` was saved as `c:\USERS\…` and never matched again. Linux paths start with `/`, which is why it only appeared on Windows. |
+| [2](https://github.com/Drepfy/Bot-/actions/runs/38164580037) | `9e89812` | **Passed**: fix plus regression test `CacheKeysRoundTripExactly` (confirmed failing before and passing after the fix). 204/204 tests, self-test 9/9, smoke UI OK. Executable SHA-256 `9bee2cc55e3d7b9284224d271064a748905608acda0b2b408efe2019124905bb`. |
+
+Every later commit gets its own run; the run's artifact contains the executable, its `.sha256`,
+`selftest.json`, `smoke-ui.log` and the test result files. The executable's bytes include the commit
+id, so the hash changes with every commit — always compare against the `.sha256` from the same run.
+
+## Other checks
+
+- **XAML resource check** (`scripts/check-xaml-resources.py`): 17 XAML files, 75 resource keys, all three
+  themes define the same keys — passed.
+- **Warnings**: the solution builds with `TreatWarningsAsErrors`; 0 warnings, 0 errors.
+- **Vulnerability audit**: `dotnet list package --vulnerable --include-transitive` reported "no vulnerable
+  packages given the current sources" for all 15 projects (2026-10-11, nuget.org advisory data).
+- **Reproducibility**: two consecutive publishes of the same source on the Linux machine produced
+  byte-identical single-file executables.
+- **Rule tool**: `keygen`, `sign`, `verify` and `validate` were run on the bundled database; a modified copy
+  of the signed file was rejected by `verify`.
+- **Line endings**: `.gitattributes` pins LF, so the embedded rule database has the same bytes and SHA-256 on
+  every platform (before this, a Windows checkout produced CRLF and a different hash).
+
+## Not verified
+
+- **No manual, interactive use of the GUI** by a person (clicking through dialogs, screen readers, high-DPI
+  monitors, keyboard-only use). The smoke test proves that each page loads and renders, not that every
+  workflow is pleasant.
+- **No real Minecraft installations or launchers** were scanned. Discovery was tested against synthetic
+  folder layouts for the official launcher, Prism, Modrinth, CurseForge, Lunar Client and custom folders;
+  the MultiMC, PolyMC, ATLauncher, GDLauncher, Feather and Badlion layouts have no dedicated test.
+- **No real cheat clients or malware samples** were scanned (by design). Rules were exercised only against
+  synthetic fixtures built from the public indicators cited in [DETECTION.md](DETECTION.md) (all rules are
+  loaded and validated; matching tests use representative families). Real-world false-positive and
+  false-negative rates are unknown.
+- **No performance benchmarks** on large real-world modpacks; bounded-concurrency and memory-budget
+  behaviour is covered by unit tests only.
+- **Windows 10 and desktop Windows 11** were not tested directly; CI uses GitHub's `windows-latest`
+  runner image (NT build 26100).
+- **Signed rule updates over the network** were tested with a local fake HTTP handler, not against a real
+  server; there is no official update server.
+- **Code signing**: the executable is unsigned.

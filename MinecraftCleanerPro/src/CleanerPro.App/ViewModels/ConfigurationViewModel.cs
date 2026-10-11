@@ -80,7 +80,7 @@ public sealed class ConfigurationViewModel : PageViewModel
 
     public override string Icon => "\uE713";
 
-    public override string Description => "All supported settings. Changes are validated and the previous configuration is backed up before saving.";
+    public override string Description => "All supported settings. Changes are validated and the previous configuration is backed up before saving. Unsaved changes are discarded when you leave this page.";
 
     public string FilePath => _configuration.FilePath;
 
@@ -159,7 +159,10 @@ public sealed class ConfigurationViewModel : PageViewModel
 
     public override void OnNavigatedTo()
     {
-        UpdateLoadStatus();
+        // Always start from the saved configuration, so changes made on other pages (for example custom
+        // folders added on the Installations page) are never overwritten by a stale copy.
+        _working = _configuration.CloneCurrent();
+        LoadFromWorking();
     }
 
     private void LoadFromWorking()

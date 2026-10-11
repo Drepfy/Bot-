@@ -1,0 +1,4 @@
+# Keep line endings identical on every OS so builds are reproducible and the embedded
+# rule database has the same bytes (and SHA-256 / signature) on Windows and Linux.
+* text=auto eol=lf
+*.ps1 text eol=crlf
