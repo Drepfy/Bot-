@@ -9,14 +9,14 @@ Same environments as 1.0.0 (below). Runs on 2026-10-11.
 
 ### Automated test suite — 293 tests
 
-| Project | Tests | Linux |
-|---|---|---|
-| CleanerPro.Core.Tests | 76 | 75 passed, 1 skipped (`[WindowsFact]`) |
-| CleanerPro.Detection.Tests | 114 | 114 passed |
-| CleanerPro.Scanner.Tests | 70 | 70 passed |
-| CleanerPro.Quarantine.Tests | 22 | 22 passed |
-| CleanerPro.Integration.Tests | 11 | 11 passed |
-| **Total** | **293** | **292 passed, 1 skipped, 0 failed** |
+| Project | Tests | Linux | Windows CI run 7 |
+|---|---|---|---|
+| CleanerPro.Core.Tests | 76 | 75 passed, 1 skipped (`[WindowsFact]`) | 76 passed |
+| CleanerPro.Detection.Tests | 114 | 114 passed | 114 passed |
+| CleanerPro.Scanner.Tests | 70 | 70 passed | 70 passed |
+| CleanerPro.Quarantine.Tests | 22 | 22 passed | 22 passed |
+| CleanerPro.Integration.Tests | 11 | 11 passed | 11 passed |
+| **Total** | **293** | **292 passed, 1 skipped, 0 failed** | **293 passed, 0 failed** (symbolic links allowed) |
 
 New in this version (89 tests), all with synthetic fixtures:
 - **Rules**: every new client and add-on is a known match with its mod id and package; Forge core-mod
@@ -44,6 +44,13 @@ New in this version (89 tests), all with synthetic fixtures:
   shares the file with writers; running games and launchers are recognised by process name. Linux does not
   enforce Windows file-sharing modes, so the sharing tests are only meaningful in the Windows CI run.
 
+### Windows CI runs
+
+| Run | Commit | Result |
+|---|---|---|
+| [6](https://github.com/Drepfy/Bot-/actions/runs/38168431164) | `69bb54c` (new rules, weak spots, launchers, deleting) | **Passed**: 280/280 tests, symbolic links allowed, self-test 9/9, smoke UI OK (all 9 pages). |
+| [7](https://github.com/Drepfy/Bot-/actions/runs/38169202194) | `ee22fd4` (black bars, coexistence, docs) | **Passed**: 293/293 tests, symbolic links allowed, self-test 9/9 on Windows NT 10.0.26100 with rule database 2026.10.11.2, smoke UI OK (all 9 pages rendered with the new black-bar controls). Executable SHA-256 `b3dce77182783e11a763c084439a59029774864dbf6c99cfa2493ec854896f74`. |
+
 ### Published executable (Linux build, run under Wine 9.0)
 
 | Check | Result |
@@ -51,9 +58,8 @@ New in this version (89 tests), all with synthetic fixtures:
 | `--self-test` (9 steps) | **9/9 passed**: version 1.1.0, rule database 2026.10.11.2 with 63 rules (SHA-256 `b55bca7ab15082d742706d7c89478924f6630abbaebb0f35827bfba4640f2dec`) |
 | Problem found and fixed | The first Wine run passed `--data-root` with forward slashes (`Z:/tmp/...`); the self-test compared that raw path with the scanner's normalised paths and reported 3 failed steps. The self-test now normalises its folder; the re-run with the same arguments passed 9/9. |
 
-### Not verified for 1.1.0 (yet)
+### Not verified for 1.1.0
 
-- Windows CI results for this version are recorded below once the run has finished.
 - The new interface elements (black bars, delete buttons, folder search button, manual-removal box) are only
   covered by the UI smoke test, which opens each page; nobody has clicked through them on Windows.
 - The folder search and the Java-environment reading were tested with synthetic folders and injected values,
