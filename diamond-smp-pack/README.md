@@ -5,6 +5,7 @@ A vanilla-friendly Minecraft Java resource pack. Blocks, items and mobs keep the
 **Download:**
 * [`Diamond-SMP-Black-Hole-Pack.zip`](Diamond-SMP-Black-Hole-Pack.zip): full quality.
 * [`Diamond-SMP-Black-Hole-Pack-Lite.zip`](Diamond-SMP-Black-Hole-Pack-Lite.zip): half-resolution skies for low-end PCs and laptops.
+* [`Diamond-SMP-Light-Boost.zip`](Diamond-SMP-Light-Boost.zip): optional add-on that brightens dark places a little (see [Light Boost add-on](#light-boost-add-on)).
 
 ![Day cycle](previews/day_cycle.png)
 
@@ -62,6 +63,23 @@ Vanilla Minecraft can't put textures on the Overworld sky, so the sky layers use
 
 Without those mods you still get the black hole sun, the title screen, the logo, the splashes and the End sky.
 
+## Light Boost add-on
+
+[`Diamond-SMP-Light-Boost.zip`](Diamond-SMP-Light-Boost.zip) is a tiny separate pack. Put it **above** the main pack. It gently brightens the world, and the darker a spot is, the stronger the boost:
+
+| Spot | Vanilla brightness | With boost |
+|---|---|---|
+| Full daylight | 0.99 | 0.99 (unchanged) |
+| Mid-dark cave (light 7) | 0.41 | 0.45 |
+| Pitch black | 0.10 | 0.21 |
+
+![Light boost](previews/light_boost.png)
+
+It works by patching Minecraft's lighting shader, so it ships one version per shader:
+* Supported: **1.21.9 to 1.21.11, 26.1, 26.2 and 26.3**. On any other version it does nothing.
+* It switches itself off during the Warden's **Darkness** effect, so it stays fair in PvP.
+* It stacks with your Brightness slider.
+
 ## FPS: what helps and what doesn't
 
 Straight answer: **no resource pack can give 100x FPS.** FPS is mostly decided by how many chunks, entities and light updates your PC has to draw. This pack's sky costs about the same as the vanilla sky: a few textured boxes. What actually helps:
@@ -107,7 +125,11 @@ If you really want one zip, [`generator/merge_packs.py`](generator/merge_packs.p
 
 ```bash
 python generator/merge_packs.py path/to/OtherPack.zip          # or add --lite
+# keep vanilla armor + potions from the other pack, and add the light boost:
+python generator/merge_packs.py path/to/OtherPack.zip --vanilla armor potions --light-boost
 ```
+
+`--vanilla armor` drops the other pack's armor icons, worn armor, armor glint and trim colors. `--vanilla potions` drops its potion bottles, effect icons, effect backgrounds and potion particles. Without those files, the vanilla look of your Minecraft version shows through.
 
 ⚠️ Merged zips are **for your own use**. Many packs (Fortyone included) forbid sharing modified versions, so don't upload one or use it as the server pack without that author's permission.
 
@@ -142,6 +164,7 @@ Every texture is generated from scratch by [`generator/`](generator). No Mojang 
 * [`build_pack.py`](generator/build_pack.py): renders every layer and zips the full and Lite packs.
   * Skyboxes are 3072×2048, 2×2 supersampled, and padded so glare is seamless across cube faces.
 * [`preview.py`](generator/preview.py): reads the textures back the way the game maps them, to make the screenshots above.
+* [`light_boost.py`](generator/light_boost.py): builds the Light Boost add-on from the vanilla lighting shaders.
 * [`merge_packs.py`](generator/merge_packs.py): personal merges with other packs.
 
 Rebuild (about 10 minutes on 4 cores):

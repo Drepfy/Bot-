@@ -1,3 +1,4 @@
 pack/
 __pycache__/
 personal/
+generator/.cache/
