@@ -10,6 +10,18 @@
 - No hidden background activity: the application runs only while its window is open, creates no services,
   scheduled tasks or startup entries, does not hide its process and does not interfere with security software.
 - **Offline mode is on by default** and blocks every network request.
+- **What is read on this computer**, all read-only: your Minecraft and launcher folders; launcher settings files
+  and the Java environment variables (`JAVA_TOOL_OPTIONS`, `_JAVA_OPTIONS`, `JDK_JAVA_OPTIONS`) to find Java
+  agents; on Full scans the top two levels of Downloads and Desktop, opening only programs and archives
+  (`.jar`, `.zip`, `.exe`, `.dll`, `.rar`, `.7z`); and, for the folder search, folder *names* in your user folders
+  and the top levels of local drives (no file there is opened). Each can be turned off in the configuration.
+- **Black bars on screen.** Your Windows user name, user-profile folder name and computer name are covered by
+  black bars wherever they appear in the interface (click a bar to reveal it). While hidden, the text is not
+  in the window at all, so screenshots, copy and screen readers cannot reveal it. Turn it off with
+  `interface.hidePrivateInformation`. Reports have their own redaction choice when exported.
+- **Delete everything.** *Privacy & Updates → Delete all application data* removes history, reports,
+  quarantined files (permanently), the audit log, logs, the scan cache, the network log and configuration
+  backups, and resets the configuration, after you confirm the exact list and type `DELETE`.
 
 ## Network endpoints
 

@@ -1,9 +1,69 @@
 # Test results
 
 This file records which verifications actually ran, where, and with what result. Nothing here is projected or
-assumed; anything that was **not** verified is listed under [Not verified](#not-verified).
+assumed; anything that was **not** verified is listed under *Not verified* for each version.
 
-## Environments
+## Version 1.1.0
+
+Same environments as 1.0.0 (below). Runs on 2026-10-11.
+
+### Automated test suite — 293 tests
+
+| Project | Tests | Linux |
+|---|---|---|
+| CleanerPro.Core.Tests | 76 | 75 passed, 1 skipped (`[WindowsFact]`) |
+| CleanerPro.Detection.Tests | 114 | 114 passed |
+| CleanerPro.Scanner.Tests | 70 | 70 passed |
+| CleanerPro.Quarantine.Tests | 22 | 22 passed |
+| CleanerPro.Integration.Tests | 11 | 11 passed |
+| **Total** | **293** | **292 passed, 1 skipped, 0 failed** |
+
+New in this version (89 tests), all with synthetic fixtures:
+- **Rules**: every new client and add-on is a known match with its mod id and package; Forge core-mod
+  manifests work as a second indicator; Argon's ImmediatelyFast disguise; any Meteor add-on by entrypoint;
+  RusherHack plugins; impersonation of Sodium, Iris, Lithium, Mod Menu and ImmediatelyFast is flagged while
+  real builds in every official package (including old ones) are not; impersonation is not concluded for jars
+  that were not fully read; the client-name heuristic matches distinctive names and ignores ordinary words
+  (`future.jar`, `sunrise-shaders.zip`, `impactor.jar`); `none` conditions and their validation; every new rule
+  cites a GitHub source verified on 2026-10-11.
+- **Weak spots**: renamed or disabled jars (`.jar.disabled`, `.dat`, no extension) are detected by content, and
+  not when the setting is off; picture files are not opened; a `-javaagent` in `launcher_profiles.json`, in a
+  Prism `instance.cfg` and in `JAVA_TOOL_OPTIONS` is reported for manual removal, the agent jar it loads is
+  scanned, and that jar's folder (not the whole scan) is approved for cleanup; Downloads is checked on Full scans only, two levels deep, programs and archives
+  only; agent-option parsing (quoted paths, options, INI escaping, `-agentlib`, boot class path).
+- **Launchers**: ATLauncher, GDLauncher (both layouts), Feather, Badlion, PolyMC, MultiMC-format forks by
+  layout, Technic, Microsoft Store redirected folders, shared launch-settings files, and the folder search
+  (finds portable and copied game folders, ignores folders without game data, skips known installations,
+  system and excluded folders, stops at its limits).
+- **Deleting**: permanent removal from Findings deletes exactly the verified file and logs both steps, keeps a
+  file that changed since the scan, and honours path protection; "Delete all application data" removes history,
+  reports, quarantine, audit log, logs, backups and other stores, resets the configuration, and leaves Minecraft
+  files untouched.
+- **Privacy**: user and computer names are found as whole words only, longest first; masking.
+- **Coexistence**: while this application reads a file, another program can still write and delete it; hashing
+  shares the file with writers; running games and launchers are recognised by process name. Linux does not
+  enforce Windows file-sharing modes, so the sharing tests are only meaningful in the Windows CI run.
+
+### Published executable (Linux build, run under Wine 9.0)
+
+| Check | Result |
+|---|---|
+| `--self-test` (9 steps) | **9/9 passed**: version 1.1.0, rule database 2026.10.11.2 with 63 rules (SHA-256 `b55bca7ab15082d742706d7c89478924f6630abbaebb0f35827bfba4640f2dec`) |
+| Problem found and fixed | The first Wine run passed `--data-root` with forward slashes (`Z:/tmp/...`); the self-test compared that raw path with the scanner's normalised paths and reported 3 failed steps. The self-test now normalises its folder; the re-run with the same arguments passed 9/9. |
+
+### Not verified for 1.1.0 (yet)
+
+- Windows CI results for this version are recorded below once the run has finished.
+- The new interface elements (black bars, delete buttons, folder search button, manual-removal box) are only
+  covered by the UI smoke test, which opens each page; nobody has clicked through them on Windows.
+- The folder search and the Java-environment reading were tested with synthetic folders and injected values,
+  not on a real computer with real launchers.
+- As before: no real cheat clients or malware were scanned, and real-world detection and false-positive rates
+  are unknown.
+
+## Version 1.0.0
+
+### Environments
 
 | Environment | Details | Used for |
 |---|---|---|
@@ -11,7 +71,7 @@ assumed; anything that was **not** verified is listed under [Not verified](#not-
 | Wine 9.0 on the same Linux machine (headless, Xvfb) | reports itself as Windows NT 10.0.19043, .NET 10.0.12 runtime from the self-contained exe | `--self-test` of the published executable |
 | GitHub Actions `windows-latest` | Windows NT 10.0.26100, SDK from `global.json` | build, **all** tests incl. Windows-only ones, publish, `--self-test`, `--smoke-ui` (real WPF rendering) |
 
-## Automated test suite
+### Automated test suite
 
 204 tests in five projects. Runs on 2026-10-11:
 
@@ -46,7 +106,7 @@ engine (cancellation, pause, cache, memory budget, size limits, overlapping root
 quarantine (integrity, interrupted operations, simulated disk-full, files changed since the scan, restore
 without overwrite, deletion confirmations); reports and redaction; history; logging; end-to-end flows.
 
-## Published executable
+### Published executable
 
 ### Self-test (`--self-test`)
 
@@ -73,7 +133,7 @@ resource or invalid XAML). WPF data-binding errors are not exceptions and are no
 | Windows CI runs 2, 3, 4 | all 9 pages rendered, log ends with `SMOKE-UI: OK` |
 | Wine 9.0 | **not possible**: WPF terminates inside its font-fallback code under this Wine build, also for a minimal one-window WPF program with no application code, so this is an environment limitation, not an application error |
 
-## Windows CI runs
+### Windows CI runs
 
 | Run | Commit | Result |
 |---|---|---|
@@ -86,7 +146,7 @@ Every later commit gets its own run; the run's artifact contains the executable,
 `selftest.json`, `smoke-ui.log` and the test result files. The executable's bytes include the commit
 id, so the hash changes with every commit — always compare against the `.sha256` from the same run.
 
-## Other checks
+### Other checks
 
 - **XAML resource check** (`scripts/check-xaml-resources.py`): 17 XAML files, 75 resource keys, all three
   themes define the same keys — passed.
@@ -101,7 +161,7 @@ id, so the hash changes with every commit — always compare against the `.sha25
   every platform. Before this, a Windows checkout produced CRLF and a different hash; since run 3 the
   Windows self-test reports the same hash as Linux.
 
-## Not verified
+### Not verified
 
 - **No manual, interactive use of the GUI** by a person (clicking through dialogs, screen readers, high-DPI
   monitors, keyboard-only use). The smoke test proves that each page loads and renders, not that every

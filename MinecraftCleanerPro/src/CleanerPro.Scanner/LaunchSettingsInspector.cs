@@ -70,9 +70,7 @@ public static partial class LaunchSettingsInspector
                 return [];
             }
 
-            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-            using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
-            text = reader.ReadToEnd();
+            text = Infrastructure.SharedFile.ReadAllText(path);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

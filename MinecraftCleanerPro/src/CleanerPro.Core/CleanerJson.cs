@@ -40,5 +40,5 @@ public static class AppInfo
     public const string DataFolderName = "MinecraftCleanerPro";
 
     public static string Version { get; } =
-        typeof(AppInfo).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "1.0.0";
+        typeof(AppInfo).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "1.1.0";
 }

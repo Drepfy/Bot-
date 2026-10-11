@@ -1,6 +1,7 @@
 <UserControl x:Class="CleanerPro.App.Views.PrivacyView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:CleanerPro.App.Controls">
   <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
     <StackPanel Margin="{StaticResource Space.Page}">
       <Border Style="{StaticResource Card}">
@@ -70,7 +71,7 @@
                     <TextBlock Style="{StaticResource Text.Body}">
                       <Run Text="{Binding Name, Mode=OneWay}" FontWeight="SemiBold" /><Run Text=" — " /><Run Text="{Binding Purpose, Mode=OneWay}" />
                     </TextBlock>
-                    <TextBlock Text="{Binding Path, Mode=OneWay}" Style="{StaticResource Text.Small}" FontFamily="{StaticResource Font.Mono}" />
+                    <controls:PrivateText Value="{Binding Path, Mode=OneWay}" Style="{StaticResource Text.Small}" FontFamily="{StaticResource Font.Mono}" />
                   </StackPanel>
                 </DockPanel>
               </DataTemplate>

@@ -1,6 +1,7 @@
 <UserControl x:Class="CleanerPro.App.Views.FindingsView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:CleanerPro.App.Controls">
   <Grid Margin="{StaticResource Space.Page}">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />
@@ -64,7 +65,11 @@
             <DataGridTextColumn Header="File" Binding="{Binding Name, Mode=OneWay}" Width="*" />
             <DataGridTextColumn Header="Severity" Binding="{Binding Severity, Mode=OneWay}" Width="Auto" />
             <DataGridTextColumn Header="Confidence" Binding="{Binding Confidence, Mode=OneWay}" Width="Auto" />
-            <DataGridTextColumn Header="Status" Binding="{Binding StatusText, Mode=OneWay}" Width="*" />
+            <DataGridTemplateColumn Header="Status" SortMemberPath="StatusText" Width="*">
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate><controls:PrivateText Value="{Binding StatusText, Mode=OneWay}" /></DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
             <DataGridTextColumn Header="Installation" Binding="{Binding Installation, Mode=OneWay}" Width="*" />
           </DataGrid.Columns>
         </DataGrid>
@@ -82,7 +87,7 @@
             <StackPanel Visibility="{Binding HasSelection, Converter={StaticResource BoolToVisibility}}">
               <TextBlock Text="{Binding Selected.ClassificationText, Mode=OneWay}" Style="{StaticResource Text.Subtitle}" Margin="0"
                          Foreground="{Binding Selected.Classification, Converter={StaticResource ClassificationBrush}}" />
-              <TextBlock Text="{Binding Selected.Path, Mode=OneWay}" Style="{StaticResource Text.Mono}" Margin="{StaticResource Space.GapSmall}" />
+              <controls:PrivateText Value="{Binding Selected.Path, Mode=OneWay}" Style="{StaticResource Text.Mono}" Margin="{StaticResource Space.GapSmall}" />
               <StackPanel Orientation="Horizontal" Margin="{StaticResource Space.GapSmall}">
                 <Button Content="Show in _Explorer" Command="{Binding OpenLocationCommand}" />
                 <Button Content="Copy SHA-_256" Command="{Binding CopyHashCommand}" />
@@ -133,8 +138,8 @@
                         <TextBlock Style="{StaticResource Text.Body}">
                           <Run Text="{Binding Strength, Mode=OneWay}" FontWeight="SemiBold" /><Run Text=" · " /><Run Text="{Binding Kind, Mode=OneWay}" /><Run Text=" · " /><Run Text="{Binding RuleId, Mode=OneWay}" />
                         </TextBlock>
-                        <TextBlock Text="{Binding Description, Mode=OneWay}" Style="{StaticResource Text.Body}" />
-                        <TextBlock Text="{Binding Location, Mode=OneWay}" Style="{StaticResource Text.Small}" FontFamily="{StaticResource Font.Mono}"
+                        <controls:PrivateText Value="{Binding Description, Mode=OneWay}" Style="{StaticResource Text.Body}" />
+                        <controls:PrivateText Value="{Binding Location, Mode=OneWay}" Style="{StaticResource Text.Small}" FontFamily="{StaticResource Font.Mono}"
                                    Visibility="{Binding Location, Converter={StaticResource HasValueToVisibility}}" />
                       </StackPanel>
                     </Border>
@@ -173,7 +178,7 @@
                       BorderBrush="{DynamicResource Brush.Warning}" BorderThickness="2,0,0,0" Padding="8,4" Margin="0,8,0,0">
                 <StackPanel>
                   <TextBlock Text="Remove manually" Style="{StaticResource Text.Label}" Margin="0" />
-                  <TextBlock Text="{Binding Selected.ManualCleanupGuidance, Mode=OneWay}" Style="{StaticResource Text.Body}" TextWrapping="Wrap" />
+                  <controls:PrivateText Value="{Binding Selected.ManualCleanupGuidance, Mode=OneWay}" Style="{StaticResource Text.Body}" />
                 </StackPanel>
               </Border>
 
@@ -181,7 +186,7 @@
               <ItemsControl ItemsSource="{Binding Selected.Limitations}" Focusable="False">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate>
-                    <TextBlock Text="{Binding Mode=OneWay}" Style="{StaticResource Text.Muted}" Margin="{StaticResource Space.GapSmall}" />
+                    <controls:PrivateText Value="{Binding Mode=OneWay}" Style="{StaticResource Text.Muted}" Margin="{StaticResource Space.GapSmall}" />
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
@@ -194,13 +199,21 @@
     <Expander Grid.Row="4" Header="Post-cleanup verification" Margin="0,12,0,0"
               Visibility="{Binding VerificationSummary, Converter={StaticResource HasValueToVisibility}}">
       <StackPanel Margin="8">
-        <TextBlock Text="{Binding VerificationSummary, Mode=OneWay}" Style="{StaticResource Text.Body}" Margin="{StaticResource Space.GapSmall}" />
+        <controls:PrivateText Value="{Binding VerificationSummary, Mode=OneWay}" Style="{StaticResource Text.Body}" Margin="{StaticResource Space.GapSmall}" />
         <DataGrid ItemsSource="{Binding VerificationItems}" MaxHeight="220" AutomationProperties.Name="Verification results">
           <DataGrid.Columns>
             <DataGridTextColumn Header="Outcome" Binding="{Binding Outcome, Mode=OneWay}" Width="Auto" />
             <DataGridTextColumn Header="Family" Binding="{Binding Family, Mode=OneWay}" Width="*" />
-            <DataGridTextColumn Header="Item" Binding="{Binding Path, Mode=OneWay}" Width="2*" />
-            <DataGridTextColumn Header="Details" Binding="{Binding Detail, Mode=OneWay}" Width="3*" />
+            <DataGridTemplateColumn Header="Item" SortMemberPath="Path" Width="2*">
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate><controls:PrivateText Value="{Binding Path, Mode=OneWay}" /></DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
+            <DataGridTemplateColumn Header="Details" SortMemberPath="Detail" Width="3*">
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate><controls:PrivateText Value="{Binding Detail, Mode=OneWay}" /></DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
           </DataGrid.Columns>
         </DataGrid>
       </StackPanel>

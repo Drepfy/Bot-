@@ -1,6 +1,7 @@
 <UserControl x:Class="CleanerPro.App.Views.InstallationsView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:CleanerPro.App.Controls">
   <Grid Margin="{StaticResource Space.Page}">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />
@@ -21,7 +22,7 @@
 
     <StackPanel Grid.Row="1" Margin="{StaticResource Space.Gap}">
       <TextBlock Text="{Binding ScopeExplanation, Mode=OneWay}" Style="{StaticResource Text.Muted}" />
-      <TextBlock Text="{Binding SearchStatus, Mode=OneWay}" Style="{StaticResource Text.Muted}" FontStyle="Italic"
+      <controls:PrivateText Value="{Binding SearchStatus, Mode=OneWay}" Style="{StaticResource Text.Muted}" FontStyle="Italic"
                  Visibility="{Binding SearchStatus, Converter={StaticResource HasValueToVisibility}}" AutomationProperties.LiveSetting="Polite" />
     </StackPanel>
 
@@ -36,10 +37,18 @@
               </DataTemplate>
             </DataGridTemplateColumn.CellTemplate>
           </DataGridTemplateColumn>
-          <DataGridTextColumn Header="Name" Binding="{Binding Name, Mode=OneWay}" Width="2*" />
+          <DataGridTemplateColumn Header="Name" SortMemberPath="Name" Width="2*">
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate><controls:PrivateText Value="{Binding Name, Mode=OneWay}" /></DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
           <DataGridTextColumn Header="Launcher" Binding="{Binding Launcher, Mode=OneWay}" Width="Auto" />
           <DataGridTextColumn Header="Mod loader" Binding="{Binding Loaders, Mode=OneWay}" Width="Auto" />
-          <DataGridTextColumn Header="Location" Binding="{Binding RootPath, Mode=OneWay}" Width="3*" />
+          <DataGridTemplateColumn Header="Location" SortMemberPath="RootPath" Width="3*">
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate><controls:PrivateText Value="{Binding RootPath, Mode=OneWay}" /></DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
           <DataGridTextColumn Header="Found via" Binding="{Binding DiscoveredBy, Mode=OneWay}" Width="*" />
           <DataGridTextColumn Header="Last inspected" Binding="{Binding LastInspected, Mode=OneWay}" Width="Auto" />
         </DataGrid.Columns>
@@ -66,7 +75,7 @@
           <ItemsControl ItemsSource="{Binding Notes}" Focusable="False">
             <ItemsControl.ItemTemplate>
               <DataTemplate>
-                <TextBlock Text="{Binding Mode=OneWay}" Style="{StaticResource Text.Body}" Margin="{StaticResource Space.GapSmall}" />
+                <controls:PrivateText Value="{Binding Mode=OneWay}" Style="{StaticResource Text.Body}" Margin="{StaticResource Space.GapSmall}" />
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
@@ -74,7 +83,7 @@
           <ItemsControl ItemsSource="{Binding LocationsChecked}" Focusable="False">
             <ItemsControl.ItemTemplate>
               <DataTemplate>
-                <TextBlock Text="{Binding Mode=OneWay}" Style="{StaticResource Text.Small}" FontFamily="{StaticResource Font.Mono}" />
+                <controls:PrivateText Value="{Binding Mode=OneWay}" Style="{StaticResource Text.Small}" FontFamily="{StaticResource Font.Mono}" />
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>

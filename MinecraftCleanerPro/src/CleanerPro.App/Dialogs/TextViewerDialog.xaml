@@ -7,6 +7,8 @@
         FontFamily="{StaticResource Font.Body}" FontSize="{DynamicResource FontSize.Body}">
   <DockPanel Margin="16">
     <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+      <ToggleButton x:Name="RevealToggle" Content="_Show private information" Checked="OnRevealChanged" Unchecked="OnRevealChanged" Margin="0,0,8,0"
+                    ToolTip="Your user and computer names are hidden while this is off. Copying copies what is shown." />
       <Button Content="_Copy to clipboard" Click="OnCopy" />
       <Button Content="_Close" IsCancel="True" IsDefault="True" Click="OnClose" Style="{StaticResource Button.Primary}" Margin="0" />
     </StackPanel>

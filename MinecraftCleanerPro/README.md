@@ -20,16 +20,21 @@ works fully offline. It does not claim to find every cheat — see [Known limita
 ## What it does
 
 1. **Discovers installations** from launcher metadata: the official launcher (including custom
-   profile game directories in `launcher_profiles.json`), Prism Launcher / PolyMC / MultiMC
-   instances, Modrinth App, CurseForge, ATLauncher, GDLauncher, and the data folders of Lunar,
-   Feather and Badlion. Loaders (Fabric, Quilt, Forge, NeoForge) are identified from metadata.
-   Unparseable metadata is reported, never guessed. You can add any other folder.
+   profile game directories in `launcher_profiles.json`, and launchers that share `.minecraft` such as
+   TLauncher, SKLauncher and HMCL), Prism Launcher / PolyMC / MultiMC and any other MultiMC-format
+   launcher, Modrinth App, CurseForge, ATLauncher, GDLauncher, Technic, Microsoft Store copies, and the
+   data folders of Lunar, Feather and Badlion. A background folder search (folder names only) finds game
+   folders no launcher lists, such as portable launchers on the Desktop or another drive. Loaders (Fabric,
+   Quilt, Forge, NeoForge) are identified from metadata. Unparseable metadata is reported, never guessed.
+   You can add any other folder.
 2. **Shows the exact scope** (every folder, why it is included, how deep) before a Quick, Full or
    Custom scan starts.
 3. **Scans read-only** with a bounded, cancellable, pausable pipeline at reduced priority:
-   enumeration without following links → type/size checks → metadata → SHA-256/SHA-1 →
-   static ZIP/JAR inspection (bomb-safe, nested jars) → static Java bytecode inspection →
-   rule matching → evidence-based classification.
+   enumeration without following links → type/size checks (jars are also recognised by content, so
+   renamed or disabled jars are not missed) → metadata → SHA-256/SHA-1 → static ZIP/JAR inspection
+   (bomb-safe, nested jars) → static Java bytecode inspection → rule matching → evidence-based
+   classification. It also checks launcher settings and `JAVA_TOOL_OPTIONS` for Java agents (and scans
+   what they load), and on Full scans the top levels of Downloads and Desktop.
 4. **Explains each finding**: classification (Known match / High-confidence suspicion / Needs review /
    Likely legitimate / Unverified), separate confidence, severity, reputation and recommended
    action, every evidence item, the rule id and version, its public sources and verification date,
@@ -37,17 +42,31 @@ works fully offline. It does not claim to find every cheat — see [Known limita
 5. **Quarantines** approved files: re-validates the path, checks the file is unchanged, copies it
    into an encoded payload, verifies the copy by SHA-256 and only then removes the original —
    journaled so a crash or power loss never loses data. Restore never overwrites another file.
-   Permanent deletion is only possible from quarantine, after confirming the exact list.
+   Permanent deletion (from Findings, from Quarantine, or "delete all application data") always
+   needs the exact list, an acknowledgement and typing `DELETE`.
 6. **Verifies** cleanup by rescanning the affected folders and comparing by path and hash.
 7. **Reports** in HTML, TXT and JSON, with personal-path redaction, and keeps a searchable history.
+8. **Hides private information on screen**: your user name and computer name are covered by black bars
+   that you click to reveal.
 
-## What it detects (rule database 2026.10.11.1)
+## What it detects (rule database 2026.10.11.2, 63 rules)
 
 Indicators were verified on 2026-10-11 against the projects' official repositories and published
 investigations; every rule cites its sources. Details: [docs/DETECTION.md](docs/DETECTION.md).
 
-- Hacked clients: **Wurst**, **Meteor Client**, **LiquidBounce**, **BleachHack**, **ThunderHack**
-  (mod id + class package + mixin config; two independent indicators required for a known match).
+- Hacked and anarchy clients (mod id + class package + mixin config or Forge core-mod manifest; two
+  independent indicators required for a known match): **Wurst**, **Meteor Client**, **LiquidBounce** (Fabric and
+  legacy Forge, plus forks that keep its package such as **FDPClient** and **MinusBounce**), **BleachHack**,
+  **ThunderHack**, **Aoba**, **Jex**, **AnarchyClient**, **Ares**, **KAMI Blue**, **Lambda**, **SalHack**,
+  **ForgeHax**, **3arthh4ck**, **Seppuku**, **GameSense**, and the ghost client **Argon** (which disguises itself as
+  ImmediatelyFast).
+- **Meteor Client add-ons** (any add-on, plus Meteor Rejects, Meteor Crash Addon, Trouser-Streak, Meteor+, Numby
+  Hack, Meteorist, Vector, BlackOut, Orion) and **RusherHack plugins**.
+- **Impersonation**: jars that claim to be Sodium, Iris, Lithium, Mod Menu or ImmediatelyFast without their code.
+- **Java agents** (`-javaagent` and similar) in launcher settings and Java environment variables.
+- **Advanced XRay** (review only).
+- Closed-source clients (for example Vape, Future, RusherHack, Konas, Aristois, Impact, Rise, Novoline) by
+  file name only — weak evidence, review only.
 - **fractureiser** malware: stage 0 bytecode signatures (from nekodetector), published stage 2
   SHA-1 hashes, stage 2/3/3b persistence files and folders, stage 3 `dev.neko.nekoclient` classes,
   startup persistence.
@@ -119,8 +138,9 @@ MinecraftCleanerPro/
   only in memory, are injected at runtime, or were deleted before the scan leave nothing to find.
 - Only the families in the rule database are recognised. "No findings" does not mean "safe".
   Renamed, repackaged or obfuscated cheats can avoid specific rules; heuristics only flag them for review.
-- No bundled rules exist yet for closed-source "ghost" clients (for example Vape) or standalone
-  auto-clickers, because no indicator could be verified from a primary source for this release.
+- Closed-source clients (for example Vape, Future, RusherHack) have no published file indicators, so they are
+  only recognised by name (review only). Clients injected into the running game and standalone auto-clickers
+  may leave no file at all. **No file scanner can guarantee that every cheat is found.**
 - There is no official online rule-update service; updates only work with a source and signing key you configure.
 - Registry startup entries and scheduled tasks are reported, never modified.
 - Authenticode checks are offline (no revocation check); jar signatures are not verified.

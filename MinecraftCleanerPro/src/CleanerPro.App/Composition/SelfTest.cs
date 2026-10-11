@@ -26,7 +26,8 @@ public static class SelfTest
     public static int Run(string outputPath, string? dataRoot)
     {
         var steps = new List<Step>();
-        var root = dataRoot ?? Path.Combine(Path.GetTempPath(), "MinecraftCleanerPro-SelfTest-" + Guid.NewGuid().ToString("N")[..8]);
+        // Normalised, so a folder given as "C:/x" or with a trailing separator matches the paths the scanner reports.
+        var root = PathKey.NormalizeFullPath(dataRoot ?? Path.Combine(Path.GetTempPath(), "MinecraftCleanerPro-SelfTest-" + Guid.NewGuid().ToString("N")[..8]));
         Directory.CreateDirectory(root);
 
         void Check(string name, Func<string> action)

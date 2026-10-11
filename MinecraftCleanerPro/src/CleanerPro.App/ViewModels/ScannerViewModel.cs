@@ -133,8 +133,8 @@ public sealed class ScannerViewModel : PageViewModel
 
     public string ModeExplanation => _mode switch
     {
-        ScanMode.Quick => "Quick Scan: mods, config, versions and resource packs of each enabled installation, files directly in the game folder, documented malware locations and your startup entries.",
-        ScanMode.Full => "Full Minecraft Scan: every file of each enabled installation (except saves, screenshots, assets and logs), plus documented malware locations and your startup entries.",
+        ScanMode.Quick => "Quick Scan: mods, config, versions and resource packs of each enabled installation, files directly in the game folder, documented malware locations, your startup entries and Java agents in launcher settings.",
+        ScanMode.Full => "Full Minecraft Scan: every file of each enabled installation (except saves, screenshots, assets and logs), documented malware locations, your startup entries, Java agents in launcher settings, and programs and archives in the top two levels of Downloads and Desktop.",
         _ => "Custom Scan: only the folders you choose below, recursively. Folders outside Minecraft are allowed but only read.",
     };
 

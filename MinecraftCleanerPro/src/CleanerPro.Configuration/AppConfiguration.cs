@@ -295,6 +295,12 @@ public sealed class InterfaceSettings : SettingsSection
     public bool ShowScanScopeBeforeScan { get; set; } = true;
 
     public bool ConfirmExitDuringScan { get; set; } = true;
+
+    /// <summary>
+    /// Cover your Windows user name and computer name with black bars wherever they appear in the interface
+    /// (mostly inside folder paths). Click a bar to reveal it. Reports have their own redaction setting.
+    /// </summary>
+    public bool HidePrivateInformation { get; set; } = true;
 }
 
 public sealed class AccessibilitySettings : SettingsSection

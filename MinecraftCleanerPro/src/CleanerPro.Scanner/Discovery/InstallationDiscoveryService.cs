@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using CleanerPro.Core;
 using CleanerPro.Core.Models;
+using CleanerPro.Infrastructure;
 
 namespace CleanerPro.Scanner.Discovery;
 
@@ -259,7 +260,7 @@ public sealed class InstallationDiscoveryService
 
             try
             {
-                using var document = JsonDocument.Parse(File.ReadAllText(path), new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
+                using var document = JsonDocument.Parse(SharedFile.ReadAllText(path), new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
                 if (!document.RootElement.TryGetProperty("profiles", out var profiles) || profiles.ValueKind != JsonValueKind.Object)
                 {
                     notes.Add($"{profileFile} has no 'profiles' section; only the default game directory is used.");
@@ -314,7 +315,7 @@ public sealed class InstallationDiscoveryService
 
             try
             {
-                var value = ReadIniValue(File.ReadAllLines(configPath), "InstanceDir");
+                var value = ReadIniValue(SharedFile.ReadAllLines(configPath), "InstanceDir");
                 if (!string.IsNullOrWhiteSpace(value))
                 {
                     instancesDir = Path.IsPathFullyQualified(value) ? value : Path.Combine(launcherFolder, value);
@@ -349,7 +350,7 @@ public sealed class InstallationDiscoveryService
             string name = Path.GetFileName(instance);
             try
             {
-                name = ReadIniValue(File.ReadAllLines(instanceCfg), "name") ?? name;
+                name = ReadIniValue(SharedFile.ReadAllLines(instanceCfg), "name") ?? name;
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
@@ -363,7 +364,7 @@ public sealed class InstallationDiscoveryService
             {
                 try
                 {
-                    using var document = JsonDocument.Parse(File.ReadAllText(packFile));
+                    using var document = JsonDocument.Parse(SharedFile.ReadAllText(packFile));
                     if (document.RootElement.TryGetProperty("components", out var components) && components.ValueKind == JsonValueKind.Array)
                     {
                         foreach (var component in components.EnumerateArray())
@@ -403,7 +404,7 @@ public sealed class InstallationDiscoveryService
             {
                 try
                 {
-                    using var document = JsonDocument.Parse(File.ReadAllText(profileJson));
+                    using var document = JsonDocument.Parse(SharedFile.ReadAllText(profileJson));
                     if (document.RootElement.TryGetProperty("metadata", out var metadata) &&
                         metadata.TryGetProperty("loader", out var loader) && loader.ValueKind == JsonValueKind.String)
                     {
@@ -431,7 +432,7 @@ public sealed class InstallationDiscoveryService
             {
                 try
                 {
-                    using var document = JsonDocument.Parse(File.ReadAllText(manifest));
+                    using var document = JsonDocument.Parse(SharedFile.ReadAllText(manifest));
                     var root = document.RootElement;
                     if (root.TryGetProperty("name", out var n) && n.ValueKind == JsonValueKind.String)
                     {

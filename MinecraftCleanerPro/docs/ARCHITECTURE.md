@@ -29,12 +29,20 @@ module that only acts on user-approved findings.
 
 ## Scan pipeline
 
-1. **Discover** permitted locations (installations, user folders, documented system locations).
+1. **Discover** permitted locations: installations from launcher metadata (official launcher profiles, Prism,
+   MultiMC, PolyMC and any other MultiMC-format launcher recognised by its `instances/*/instance.cfg` layout,
+   Modrinth App, CurseForge, ATLauncher, GDLauncher, Technic, Microsoft Store redirected `.minecraft` folders,
+   Lunar, Feather, Badlion), folders you added, documented system locations, files loaded by Java-agent options in
+   launcher settings or `JAVA_TOOL_OPTIONS`, and (Full scan) the top two levels of Downloads and Desktop.
+   A background **folder search** looks for game folders no launcher lists (a `.minecraft` folder, or
+   `options.txt` next to `mods`/`versions`/`saves`/`resourcepacks`): user profile and AppData 4 levels deep, local
+   drives 3 levels deep, system folders skipped, at most 60,000 folders or 20 seconds, folder names only.
 2. **Enumerate** with a manual walk: no link/junction is followed (unless explicitly enabled, and then only
    into other approved roots), exclusions and depth limits apply, every unreadable folder is recorded.
    Overlapping roots are de-duplicated by normalised path.
 3. **Type and size checks**: only configured extensions (plus documented system locations) are opened;
-   larger files are checked by name and location only.
+   larger files are checked by name and location only. Other files have their first four bytes checked for a
+   ZIP signature, so renamed or disabled jars are inspected like jars (media, world and office files excepted).
 4. **Metadata**: size and timestamps; the file is checked again after reading and skipped if it changed.
 5. **Hashing**: SHA-256 (+ SHA-1) in one streaming pass with a configurable buffer.
 6. **Archive inspection** (`System.IO.Compression`, nothing written to disk): entry names, class packages,
@@ -104,6 +112,26 @@ compares with the original session using normalised paths and SHA-256, together 
 log. Outcomes per finding: Quarantined, Deleted, No longer present, Still present, Present elsewhere (same
 hash at another path), Not accessible, Operation failed, Inconclusive — plus new related detections. A missing
 file is explicitly *not* treated as proof that every component was removed.
+
+## Coexistence with other programs
+
+The application is built not to get in the way of anything else on the computer:
+
+- **Reading never blocks other programs.** Every file that belongs to someone else (mods, launcher settings) is
+  opened read-only and shared for reading, writing and deletion (`SharedFile`), so a launcher saving its settings
+  or a game updating a file is never blocked. The only exclusive read is the copy step of a quarantine you
+  confirmed, so the file cannot change between hashing and removal.
+- **Low priority.** Scan workers and the folder search run in Windows background mode (lower CPU, disk and memory
+  priority). Concurrency, queue length and archive memory are bounded; low-resource mode uses one worker.
+- **Nothing outside its own folder is changed** except the files you explicitly quarantine, restore or delete.
+  Registry entries, environment variables, scheduled tasks and launcher settings are only reported, with
+  instructions for removing them yourself.
+- **No hooks, injection, services, drivers, scheduled tasks, startup entries or global hotkeys**; the
+  application only runs while its window is open and is single-instance per data folder.
+- **Running games and launchers are detected by process name only** (read-only) and you are warned before
+  quarantine or deletion; nothing is ever closed for you.
+- **Antivirus software is left alone**: nothing is executed, unpacked to disk or hidden; quarantined copies are
+  encoded so they cannot run by accident.
 
 ## Data integrity
 

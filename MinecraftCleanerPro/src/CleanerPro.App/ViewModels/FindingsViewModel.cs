@@ -342,7 +342,8 @@ public sealed class FindingsViewModel : PageViewModel
         var weak = targets.Where(t => t.Classification is Classification.NeedsReview or Classification.Unverified).ToList();
         var message = "The selected items will be moved into quarantine. Each copy is verified by SHA-256 before the original is removed, and every item can be restored later." +
                       (weak.Count > 0 ? $"\n\n{weak.Count} item(s) are only 'Needs review' or 'Unverified'. Make sure you reviewed their evidence." : string.Empty) +
-                      "\n\nClose Minecraft and launchers first so files are not in use.";
+                      "\n\nClose Minecraft and launchers first so files are not in use." +
+                      RunningGameDetector.Warning(RunningGameDetector.FindRunning());
         if (_configuration.Current.Safety.ConfirmQuarantine &&
             !_dialogs.Confirm("Quarantine selected items?", message, targets.Select(t => t.Path).ToList(), $"Quarantine {targets.Count} item(s)"))
         {
@@ -442,7 +443,8 @@ public sealed class FindingsViewModel : PageViewModel
             Title = "Delete selected items permanently?",
             Message = "The items below are deleted permanently and cannot be restored. Use Quarantine instead if you might need them again." +
                       (weak > 0 ? $"\n\n{weak} item(s) are only 'Needs review' or 'Unverified'. Make sure you reviewed their evidence." : string.Empty) +
-                      "\n\nClose Minecraft and launchers first so files are not in use.",
+                      "\n\nClose Minecraft and launchers first so files are not in use." +
+                      RunningGameDetector.Warning(RunningGameDetector.FindRunning()),
             Items = targets.Select(t => t.Path).ToList(),
             AcknowledgementText = "I understand this cannot be undone.",
             TypeToConfirm = "DELETE",

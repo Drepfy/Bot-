@@ -5,7 +5,7 @@ mod ids, package names, mixin configuration names and manifest attributes come f
 fabric.mod.json, mcmod.info, mixin JSON or build.gradle; malware indicators come from the fractureiser
 investigation and nekodetector; JVM options come from the OpenJDK sources.
 
-Regenerate after editing:  python3 rules/build_rules.py rules/cleanerpro-rules.json
+Regenerate after editing:  python3 rules/build_rules.py rules/cleanerpro-rules.json --doc docs/DETECTION.md
 Then validate:            dotnet run --project tools/CleanerPro.RuleTool -- validate rules/cleanerpro-rules.json
 """
 import json
@@ -627,3 +627,30 @@ doc = {"formatVersion": 1, "databaseVersion": 2026101102, "displayVersion": "202
 import sys
 open(sys.argv[1], "w").write(json.dumps(doc, indent=2, ensure_ascii=False) + "\n")
 print(len(rules), "rules")
+
+# Optional: rewrite the rule table in docs/DETECTION.md from the same data, so the documentation cannot drift.
+if len(sys.argv) > 3 and sys.argv[2] == "--doc":
+    def strongest(rule):
+        levels = rule["classification"]
+        for key, label in (("knownMatch", "Known match"), ("highConfidenceSuspicion", "High-confidence"), ("needsReview", "Needs review"), ("likelyLegitimate", "Likely legitimate")):
+            if levels.get(key):
+                return label
+        return "—"
+
+    lines = [f"## Bundled database {doc['displayVersion']}", "",
+             f"{len(rules)} rules. Generated from `rules/build_rules.py`; the JSON is the authoritative copy.", "",
+             "| Rule | Family | Category | Severity | Strongest result | Indicator types | Platforms | Sources (retrieved 2026-10-11) |",
+             "|---|---|---|---|---|---|---|---|"]
+    for rule in rules:
+        types = ", ".join(sorted({i["type"] for i in rule["indicators"]}))
+        sources = "; ".join(f"[{s['title']}]({s['url']})" for s in rule["sources"]) or (
+            "n/a (test signature)" if rule["category"] == "TestSignature" else "heuristic — rationale in rule")
+        lines.append(f"| `{rule['id']}` | {rule['family']} | {rule['category']} | {rule['severity']} | {strongest(rule)} | {types} | "
+                     f"{', '.join(rule.get('platforms') or ['all'])} | {sources} |")
+    path = sys.argv[3]
+    text = open(path, encoding="utf-8").read()
+    start = text.index("## Bundled database")
+    end = text.index("### Indicator verification notes")
+    text = text[:start] + "\n".join(lines) + "\n\n" + text[end:]
+    open(path, "w", encoding="utf-8").write(text)
+    print("updated", path)

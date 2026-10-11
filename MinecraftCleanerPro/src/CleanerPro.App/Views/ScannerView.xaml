@@ -1,6 +1,7 @@
 <UserControl x:Class="CleanerPro.App.Views.ScannerView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:CleanerPro.App.Controls">
   <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
     <StackPanel Margin="{StaticResource Space.Page}">
 
@@ -35,7 +36,11 @@
           <TextBlock Text="{Binding ScopeSummary, Mode=OneWay}" Style="{StaticResource Text.Body}" Margin="{StaticResource Space.GapSmall}" />
           <DataGrid ItemsSource="{Binding ScopeRoots}" MaxHeight="260" AutomationProperties.Name="Scan scope">
             <DataGrid.Columns>
-              <DataGridTextColumn Header="Location" Binding="{Binding Path, Mode=OneWay}" Width="3*" />
+              <DataGridTemplateColumn Header="Location" SortMemberPath="Path" Width="3*">
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate><controls:PrivateText Value="{Binding Path, Mode=OneWay}" /></DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
               <DataGridTextColumn Header="Type" Binding="{Binding Kind, Mode=OneWay}" Width="Auto" />
               <DataGridTextColumn Header="Depth" Binding="{Binding Depth, Mode=OneWay}" Width="Auto" />
               <DataGridTextColumn Header="Why it is included" Binding="{Binding Reason, Mode=OneWay}" Width="3*" />
@@ -45,7 +50,7 @@
             <ItemsControl ItemsSource="{Binding ExcludedPaths}" Margin="8" Focusable="False">
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
-                  <TextBlock Text="{Binding Mode=OneWay}" Style="{StaticResource Text.Small}" FontFamily="{StaticResource Font.Mono}" />
+                  <controls:PrivateText Value="{Binding Mode=OneWay}" Style="{StaticResource Text.Small}" FontFamily="{StaticResource Font.Mono}" />
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
@@ -86,13 +91,13 @@
               <TextBlock Text="{Binding FindingsCount, Mode=OneWay, StringFormat=N0}" Style="{StaticResource Text.Subtitle}" />
             </StackPanel>
           </UniformGrid>
-          <TextBlock Text="{Binding CurrentPath, Mode=OneWay}" Style="{StaticResource Text.Small}" FontFamily="{StaticResource Font.Mono}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+          <controls:PrivateText Value="{Binding CurrentPath, Mode=OneWay}" Style="{StaticResource Text.Small}" FontFamily="{StaticResource Font.Mono}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
           <TextBlock Text="The percentage is shown only once all files have been found; until then the counts above are exact." Style="{StaticResource Text.Small}" Margin="0,4,0,0" />
 
           <Border Style="{StaticResource Banner}" Margin="0,12,0,0" Visibility="{Binding ResultSummary, Converter={StaticResource HasValueToVisibility}}">
             <DockPanel>
               <Button DockPanel.Dock="Right" Content="View findings" Command="{Binding ViewFindingsCommand}" Margin="8,0,0,0" />
-              <TextBlock Text="{Binding ResultSummary, Mode=OneWay}" Style="{StaticResource Text.Banner}" VerticalAlignment="Center" />
+              <controls:PrivateText Value="{Binding ResultSummary, Mode=OneWay}" Style="{StaticResource Text.Banner}" VerticalAlignment="Center" />
             </DockPanel>
           </Border>
         </StackPanel>

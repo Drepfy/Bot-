@@ -13,6 +13,7 @@ public static class ThemeManager
 
     public static void Apply(AppConfiguration config)
     {
+        Controls.PrivacyDisplay.HidePrivateInformation = config.Interface.HidePrivateInformation;
         var app = Application.Current;
         if (app is null)
         {

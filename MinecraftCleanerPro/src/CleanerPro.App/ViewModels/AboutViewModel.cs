@@ -32,10 +32,12 @@ public sealed class AboutViewModel : PageViewModel
     [
         "A file scan cannot prove that a player cheated. Detected files may be unused or left over, and cheats that run only in memory, are injected at runtime or were deleted before the scan leave nothing to find.",
         "Only cheat families and malware listed in the rule database are recognised. A file without findings is not declared safe.",
-        "Renamed, repackaged or obfuscated cheats can avoid the specific rules; generic heuristics only report them for review.",
+        "Renamed, repackaged or obfuscated cheats can avoid the specific rules; generic heuristics only report them for review. Closed-source clients (for example Vape, Future, RusherHack) publish no file indicators and are recognised by name only.",
+        "No file scanner can guarantee that every cheat is found. Clients injected into the running game, and stand-alone auto-clickers, may leave nothing on disk.",
         "Closed-source clients (Lunar, Badlion, Feather) have undocumented folder layouts; their folders are scanned as a whole.",
         "The application never executes, injects into or reads the memory of Minecraft or any other process. Optional process inspection only lists executable paths.",
-        "Registry startup entries and scheduled tasks are reported but never modified. Remove them with Windows tools or your antivirus after confirming.",
+        "Registry startup entries, Java environment variables, launcher settings and scheduled tasks are reported but never modified. Each finding explains how to remove it yourself.",
+        "Black bars hide your user and computer name in the interface. Text boxes on the Configuration page, where you type paths, show them in full.",
         "Authenticode signatures are verified offline; certificate revocation is not checked.",
         "Jar signature files (META-INF/*.SF) are noted but not cryptographically verified.",
         "No official online rule-update service exists for this release. Updates only work if you configure a trusted HTTPS source and signing key.",
@@ -45,7 +47,7 @@ public sealed class AboutViewModel : PageViewModel
 
     public IReadOnlyList<string> Credits { get; } =
     [
-        "Detection indicators were verified on 2026-10-11 against the official repositories of Wurst7, Meteor Client, LiquidBounce, BleachHack, ThunderHack, Baritone, Sodium, Iris, Lithium, Mod Menu and Fabric, and against the fractureiser investigation and nekodetector. Every rule lists its sources.",
+        "Detection indicators were verified on 2026-10-11 against the official repositories of each detected client and add-on (for example Wurst7, Meteor Client, LiquidBounce, BleachHack, ThunderHack, Aoba, Argon, KAMI Blue, Lambda, SalHack, ForgeHax, 3arthh4ck, Seppuku, GameSense, Ares, FDPClient), of Baritone, Sodium, Iris, Lithium, Mod Menu, ImmediatelyFast and Fabric, against the fractureiser investigation and nekodetector, and against the OpenJDK sources for Java agent options. Every rule lists its sources.",
         "Built with .NET 10 and WPF. Dependencies: Microsoft.Extensions.DependencyInjection and Microsoft.Extensions.Logging (MIT).",
     ];
 }

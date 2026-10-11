@@ -11,7 +11,7 @@ public static class FileHasher
 
     public static FileHashes Compute(string path, bool includeSha1, int bufferSize = DefaultBufferSize, CancellationToken cancellationToken = default)
     {
-        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete, 4096, FileOptions.SequentialScan);
+        using var stream = SharedFile.OpenRead(path, 4096, FileOptions.SequentialScan);
         return Compute(stream, includeSha1, bufferSize, cancellationToken);
     }
 

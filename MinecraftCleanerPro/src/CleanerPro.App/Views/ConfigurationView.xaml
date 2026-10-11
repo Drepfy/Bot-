@@ -1,6 +1,7 @@
 <UserControl x:Class="CleanerPro.App.Views.ConfigurationView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:CleanerPro.App.Controls">
   <!-- Generated layout: every supported setting of config.json (see docs/CONFIGURATION.md). -->
   <DockPanel Margin="{StaticResource Space.Page}">
     <StackPanel DockPanel.Dock="Top">
@@ -23,7 +24,11 @@
         <DataGrid.Columns>
           <DataGridTextColumn Header="Severity" Binding="{Binding Severity, Mode=OneWay}" Width="Auto" />
           <DataGridTextColumn Header="Setting" Binding="{Binding Setting, Mode=OneWay}" Width="*" />
-          <DataGridTextColumn Header="Problem" Binding="{Binding Message, Mode=OneWay}" Width="2*" />
+          <DataGridTemplateColumn Header="Problem" SortMemberPath="Message" Width="2*">
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate><controls:PrivateText Value="{Binding Message, Mode=OneWay}" /></DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
           <DataGridTextColumn Header="How to fix" Binding="{Binding HowToFix, Mode=OneWay}" Width="2*" />
         </DataGrid.Columns>
       </DataGrid>
@@ -259,6 +264,8 @@
         </DockPanel>
         <CheckBox Content="Confirm the scan scope before scanning" IsChecked="{Binding Config.Interface.ShowScanScopeBeforeScan, Mode=TwoWay}" />
         <CheckBox Content="Confirm before closing during a scan" IsChecked="{Binding Config.Interface.ConfirmExitDuringScan, Mode=TwoWay}" />
+        <CheckBox Content="Hide my user name and computer name behind black bars (click a bar to reveal it)" IsChecked="{Binding Config.Interface.HidePrivateInformation, Mode=TwoWay}"
+                  ToolTip="Useful when you share your screen or take screenshots. Reports have their own redaction choice when you export them." />
         <DockPanel Margin="0,3">
           <TextBlock Text="Text size" Width="320" Style="{StaticResource Text.Body}" VerticalAlignment="Center" />
           <TextBlock DockPanel.Dock="Right" Text="{Binding Config.Accessibility.FontScale, Mode=OneWay, StringFormat=P0}" Width="60" Style="{StaticResource Text.Body}" VerticalAlignment="Center" />

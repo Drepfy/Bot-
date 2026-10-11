@@ -19,7 +19,7 @@ public partial class ConfirmationDialog : Window
         _request = request;
         Title = request.Title;
         TitleText.Text = request.Title;
-        MessageText.Text = request.Message;
+        MessageText.Value = request.Message;
 
         if (request.Items.Count > 0)
         {

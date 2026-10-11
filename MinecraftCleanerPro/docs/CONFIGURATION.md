@@ -38,6 +38,10 @@ These cannot be disabled; setting them to `false` is a validation error:
 | `maxDirectoryDepth` | `24` | 1–256 | |
 | `followDirectoryLinks` | `false` | bool | If enabled, links are followed **only** into other approved scan locations. |
 | `inspectArchives` | `true` | bool | Read ZIP/JAR metadata and entry names (never extracted to disk). |
+| `detectArchivesByContent` | `true` | bool | Also recognise jars by their first four bytes, so renamed or disabled jars (`x.jar.disabled`, `x.dat`) are inspected. Pictures, sounds, world data and office documents are never opened for this. |
+| `inspectLaunchSettings` | `true` | bool | Read launcher settings (`launcher_profiles.json`, `instance.cfg`, `minecraftinstance.json`, `profile.json`, `instance.json`, MultiMC-format `*.cfg`) and `JAVA_TOOL_OPTIONS`, `_JAVA_OPTIONS`, `JDK_JAVA_OPTIONS` for Java agents, and scan the files they load. Read-only. |
+| `includeDownloadLocations` | `true` | bool | Full scans also check the top two levels of Downloads and Desktop; only `.jar`, `.zip`, `.exe`, `.dll`, `.rar`, `.7z` files. |
+| `searchForUnlistedInstallations` | `true` | bool | Search (in the background, folder names only, 20 s / 60,000 folders at most) the user profile, AppData and the top three levels of local drives for game folders no known launcher lists. |
 | `archiveLimits.maxEntries` | `50000` | 100–1,000,000 | |
 | `archiveLimits.maxTotalUncompressedMegabytes` | `1024` | 1–16384 | Per archive. |
 | `archiveLimits.maxEntryUncompressedMegabytes` | `64` | 1–2048 | |
@@ -134,6 +138,7 @@ These cannot be disabled; setting them to `false` is a validation error:
 | `theme` | `System` | `System`, `Light`, `Dark` |
 | `showScanScopeBeforeScan` | `true` | Confirmation dialog listing the scope. |
 | `confirmExitDuringScan` | `true` | |
+| `hidePrivateInformation` | `true` | Cover the Windows user name, user-profile folder name and computer name with black bars in the interface (click to reveal). Text viewers mask them until "Show private information" is pressed. Editable text boxes on the Configuration page show paths in full. |
 
 ### `accessibility`
 | Setting | Default | Range / meaning |
