@@ -54,6 +54,24 @@ New in this version (89 tests), all with synthetic fixtures:
 These hashes belong to development builds. The executable's bytes include the commit id, so every commit
 produces a different file; to check a download, compare it with the SHA-256 on its release page.
 
+### Public repository and release v1.1.0
+
+The code was then published to the public repository `Drepfy/MinecraftCleanerPro`, where GitHub Actions built
+and verified it again on `windows-latest` and published the release.
+
+| Run | Commit | Result |
+|---|---|---|
+| [Build and test 1](https://github.com/Drepfy/MinecraftCleanerPro/actions/runs/38175223296) | `6193ef7` (first public commit) | **Passed**: every step green, self-test 9/9, smoke UI OK (all 9 pages). |
+| [Build and test 2](https://github.com/Drepfy/MinecraftCleanerPro/actions/runs/38175357992) | `bc1e06a` (documentation corrections) | **Passed**: 293/293 tests, symbolic links allowed, .NET SDK 10.0.401, self-test 9/9, smoke UI OK (all 9 pages). |
+| [Build and test 3](https://github.com/Drepfy/MinecraftCleanerPro/actions/runs/38175720007) | `23e2e98` (release workflow) | **Passed**: every step green. |
+| [Release](https://github.com/Drepfy/MinecraftCleanerPro/actions/runs/38175720070) | `23e2e98` | **Passed and published v1.1.0**: 293/293 tests, .NET SDK 10.0.401, self-test 9/9, smoke UI OK (all 9 pages); executable SHA-256 `60f0ffd1128e5432d65cc6979a852d191d34f53ffe0dd09a7832996bdc60256b`, 62,177,856 bytes. |
+
+Download check (Linux, 2026-10-11, no GitHub sign-in): `releases/latest/download/MinecraftCleanerPro.exe`
+redirected to the v1.1.0 asset and downloaded with HTTP 200; the file's SHA-256 matched the published `.sha256` file
+and GitHub's asset digest (both `60f0ffd1…0256b`, the hash the release build printed). The downloaded executable
+is a 64-bit Windows GUI program, and its `--self-test` under Wine 9.0 passed 9/9 (version 1.1.0, rule database
+2026.10.11.2).
+
 ### Published executable (Linux build, run under Wine 9.0)
 
 | Check | Result |
