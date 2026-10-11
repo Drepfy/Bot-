@@ -36,7 +36,7 @@
   launcher is detected (by process name, read-only) and you are warned before cleanup.
 
 ### Not changed
-- The executable is still unsigned, and no file scanner can guarantee finding every cheat (see Known limitations).
+- The executable is still unsigned, and no file scanner can guarantee finding every cheat (see [Known limitations](https://github.com/Drepfy/MinecraftCleanerPro#known-limitations)).
 
 ## 1.0.0 — 2026-10-11
 
