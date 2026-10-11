@@ -120,6 +120,23 @@ public sealed class ScanEngineTests : IDisposable
     }
 
     [Fact]
+    public void CacheKeysRoundTripExactly()
+    {
+        // Regression: Windows path keys are upper-case ("C:\\USERS\\…"); a key naming policy once changed them on save.
+        var file = Path.Combine(_paths.CacheDirectory, "roundtrip.json");
+        var cache = new ScanResultCache(file);
+        var when = new DateTimeOffset(2026, 10, 11, 0, 0, 0, TimeSpan.Zero);
+        cache.MarkClean(@"C:\USERS\PLAYER\APPDATA\ROAMING\.MINECRAFT\MODS\A.JAR", 10, when, new string('a', 64), "ctx");
+        cache.Save();
+
+        var reloaded = new ScanResultCache(file);
+        reloaded.Load();
+        Assert.True(reloaded.IsVerifiedClean(@"C:\USERS\PLAYER\APPDATA\ROAMING\.MINECRAFT\MODS\A.JAR", 10, when, "ctx"));
+        Assert.False(reloaded.IsVerifiedClean(@"C:\USERS\PLAYER\APPDATA\ROAMING\.MINECRAFT\MODS\A.JAR", 11, when, "ctx"));
+        Assert.False(reloaded.IsVerifiedClean(@"C:\USERS\PLAYER\APPDATA\ROAMING\.MINECRAFT\MODS\A.JAR", 10, when, "other-rules"));
+    }
+
+    [Fact]
     public async Task FilesAboveTheSizeLimitAreSkippedButNamesAreStillChecked()
     {
         _config.Scan.MaxFileSizeMegabytes = 1;

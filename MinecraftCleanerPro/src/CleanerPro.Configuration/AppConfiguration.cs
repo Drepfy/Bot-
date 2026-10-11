@@ -171,8 +171,6 @@ public sealed class RuleUpdateSettings : SettingsSection
     /// <summary>HTTPS base URL that serves rules.json and rules.json.sig. No trusted source is configured by default.</summary>
     public string? Endpoint { get; set; }
 
-    public bool CheckOnStartup { get; set; }
-
     public int TimeoutSeconds { get; set; } = 30;
 
     public int MaxDownloadKilobytes { get; set; } = 4096;

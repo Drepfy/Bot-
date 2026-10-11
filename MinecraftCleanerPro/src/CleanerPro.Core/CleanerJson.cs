@@ -19,7 +19,8 @@ public static class CleanerJson
         {
             WriteIndented = writeIndented,
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            DictionaryKeyPolicy = JsonNamingPolicy.CamelCase,
+            // DictionaryKeyPolicy is intentionally not set: dictionary keys are data (file paths,
+            // display names) and must round-trip unchanged.
             ReadCommentHandling = JsonCommentHandling.Skip,
             AllowTrailingCommas = true,
             PropertyNameCaseInsensitive = true,
