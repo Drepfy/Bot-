@@ -64,10 +64,12 @@ CI workflow records the SHA-256 of every build it produces.
   `--self-test` and `--smoke-ui`. The executable, hash, self-test result, smoke log and test results are kept as
   the `MinecraftCleanerPro-win-x64` artifact (downloadable by anyone signed in to GitHub, for GitHub's artifact
   retention period). For a download that needs no account, use a release.
-- `.github/workflows/release.yml` runs when a tag such as `v1.1.0` is pushed. It refuses to publish unless the tag
-  matches `Version` in `Directory.Build.props`, then runs the same build and every verification, and only if all of
-  them pass creates a public GitHub Release with `MinecraftCleanerPro.exe`, its `.sha256` and the release notes
-  for that version from `docs/RELEASE-NOTES.md`. Anyone can download it without a GitHub account; the newest is
+- `.github/workflows/release.yml` publishes the `Version` in `Directory.Build.props` when it has no release yet:
+  when such a commit reaches `main`, when a tag `v<version>` is pushed (it refuses a tag that does not match the
+  version), or when it is started by hand from the Actions page. Pushes of a version that is already released do
+  nothing. It runs the same build and every verification, and only if all of them pass creates the tag and a
+  public GitHub Release with `MinecraftCleanerPro.exe`, its `.sha256` and the release notes for that version from
+  `docs/RELEASE-NOTES.md`. Anyone can download it without a GitHub account; the newest is
   always at `https://github.com/Drepfy/MinecraftCleanerPro/releases/latest/download/MinecraftCleanerPro.exe`.
 
 ## Code signing
@@ -81,5 +83,5 @@ and publish the new SHA-256.
 1. Update `Version` in `Directory.Build.props` and `docs/RELEASE-NOTES.md`.
 2. If rules changed: bump `databaseVersion`/`displayVersion`, run `CleanerPro.RuleTool validate`.
 3. `pwsh scripts/build.ps1 -SmokeUi` on Windows (or let CI run).
-4. Push a tag `v<version>` (for example `git tag v1.1.0 && git push origin v1.1.0`); the release workflow builds,
-   verifies and publishes the download.
+4. Push the commit to `main`. Because the new version has no release yet, the release workflow builds, verifies
+   and publishes the download.
