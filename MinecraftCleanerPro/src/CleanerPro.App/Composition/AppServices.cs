@@ -64,7 +64,10 @@ public static class AppServices
         services.AddSingleton(sp => new RuleUpdateService(sp.GetRequiredService<RuleRepository>(), sp.GetRequiredService<GuardedHttpClient>(),
             () => sp.GetRequiredService<ConfigurationService>().Current, paths, sp.GetRequiredService<ILogger<RuleUpdateService>>()));
 
-        services.AddSingleton(_ => new InstallationDiscoveryService());
+        services.AddSingleton(_ => new InstallationDiscoveryService(DiscoveryEnvironment.Current() with
+        {
+            SearchExclusions = [paths.DataRoot, EffectiveLocations.QuarantineDirectory(config, paths), EffectiveLocations.ReportsDirectory(config, paths)],
+        }));
         services.AddSingleton(sp => new ScanScopeBuilder(() => sp.GetRequiredService<ConfigurationService>().Current,
             () => sp.GetRequiredService<RuleRepository>().Active.Database, paths));
         services.AddSingleton(new ScanResultCache(Path.Combine(paths.CacheDirectory, "scan-cache.json")));
@@ -78,6 +81,12 @@ public static class AppServices
         services.AddSingleton(new HistoryStore(paths));
         services.AddSingleton(sp => new ReportService(() => sp.GetRequiredService<ConfigurationService>().Current, paths,
             sp.GetRequiredService<HistoryStore>(), sp.GetRequiredService<OperationLog>()));
+        services.AddSingleton(sp => new ApplicationDataEraser(paths, sp.GetRequiredService<ConfigurationService>(), sp.GetRequiredService<HistoryStore>(),
+            sp.GetRequiredService<ReportService>(), sp.GetRequiredService<OperationLog>(), sp.GetRequiredService<QuarantineService>(),
+            [
+                ("Scan cache (remembered clean files)", sp.GetRequiredService<ScanResultCache>().Clear),
+                ("Network activity log", sp.GetRequiredService<NetworkActivityLog>().Clear),
+            ]));
         services.AddSingleton<IShellLauncher, ShellLauncher>();
 
         configureUi?.Invoke(services);

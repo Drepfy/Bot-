@@ -60,8 +60,8 @@ public sealed class EndToEndTests : IDisposable
             _ => null,
         });
         _engine = new ScanEngine(() => _configuration.Current, () => _rules.Active.Database, new ScanResultCache(Path.Combine(_paths.CacheDirectory, "scan-cache.json")),
-            resolver: _resolver, startupReader: () => ([], null));
-        _scopes = new ScanScopeBuilder(() => _configuration.Current, () => _rules.Active.Database, _paths, _resolver);
+            resolver: _resolver, startupReader: () => ([], null), javaEnvironmentReader: () => ([], null));
+        _scopes = new ScanScopeBuilder(() => _configuration.Current, () => _rules.Active.Database, _paths, _resolver, javaEnvironment: () => [], downloadLocations: () => []);
         _discovery = new InstallationDiscoveryService(new DiscoveryEnvironment(_temp.Combine("Roaming"), _temp.Combine("LocalAppData"), _temp.Combine("Profile")));
 
         _game = _temp.CreateDirectory("Roaming", ".minecraft");
@@ -76,6 +76,41 @@ public sealed class EndToEndTests : IDisposable
     }
 
     public void Dispose() => _temp.Dispose();
+
+    [Fact]
+    public async Task DeleteAllApplicationDataRemovesEverythingTheAppStoredAndNothingElse()
+    {
+        var session = await _engine.RunAsync(_scopes.Build(ScanMode.Full, _discovery.Discover()), null, null, CancellationToken.None);
+        _history.Save(session);
+        var wurst = session.Findings.Single(f => f.Path.EndsWith("wurst-7.45.jar", StringComparison.Ordinal));
+        Assert.True(_quarantine.Quarantine(new QuarantineRequest { Path = wurst.Path, ApprovedRoots = [_game], ExpectedSha256 = wurst.Sha256 }).Succeeded);
+        var reports = new ReportService(() => _configuration.Current, _paths, _history, _operations);
+        reports.Export(session, ReportFormat.Html, RedactionLevel.PersonalPaths);
+        File.WriteAllText(Path.Combine(_paths.LogsDirectory, "app-20261011.log"), "log line");
+        var config = _configuration.CloneCurrent();
+        config.Scan.MaxDirectoryDepth = 9;
+        Assert.True(_configuration.Save(config, "test").Succeeded);
+        var cacheCleared = false;
+        var networkCleared = false;
+        var sodium = Path.Combine(_game, "mods", "sodium.jar");
+
+        var eraser = new ApplicationDataEraser(_paths, _configuration, _history, reports, _operations, _quarantine,
+            [("Scan cache", () => cacheCleared = true), ("Network activity log", () => networkCleared = true)]);
+        Assert.Contains(eraser.Describe(), d => d.Contains("1 item(s)", StringComparison.Ordinal) && d.Contains("cannot be restored", StringComparison.Ordinal));
+
+        var result = eraser.EraseAll();
+
+        Assert.True(result.Succeeded, string.Join(" | ", result.Problems));
+        Assert.Empty(_quarantine.ListEntries(includeRestored: true));
+        Assert.Empty(_history.ListSummaries());
+        Assert.Empty(Directory.GetFiles(reports.ReportsDirectory));
+        Assert.Empty(_operations.ReadAll());
+        Assert.Empty(Directory.GetFiles(_paths.LogsDirectory));
+        Assert.Empty(Directory.GetFiles(_paths.ConfigBackupDirectory));
+        Assert.Equal(new AppConfiguration().Scan.MaxDirectoryDepth, _configuration.Current.Scan.MaxDirectoryDepth);
+        Assert.True(cacheCleared && networkCleared);
+        Assert.True(File.Exists(sodium)); // Minecraft files are never touched.
+    }
 
     private async Task<ScanSession> Scan(ScanMode mode = ScanMode.Quick)
     {

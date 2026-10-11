@@ -130,7 +130,7 @@ public sealed class RuleMatcher
         foreach (var (rule, evidence) in hits)
         {
             var matchedIds = new HashSet<string>(evidence.Keys, StringComparer.Ordinal);
-            var level = EvaluateLevel(rule.Definition.Classification, matchedIds);
+            var level = EvaluateLevel(rule.Definition.Classification, matchedIds, absenceIsMeaningful: !observation.InspectionIncomplete);
             if (level is not null)
             {
                 results.Add(new RuleEvaluation(rule, level.Value, matchedIds.Order(StringComparer.Ordinal).ToList(), evidence.Values.ToList()));
@@ -156,6 +156,15 @@ public sealed class RuleMatcher
                     hit(r, $"{mod.MetadataFile ?? "Mod metadata"} declares mod id \"{mod.ModId}\"{(mod.Name is null ? string.Empty : $" (name \"{mod.Name}\")")}", mod.ModId, mod.MetadataFile);
                 }
             });
+        }
+
+        foreach (var mod in archive.Mods)
+        {
+            foreach (var entrypoint in mod.Entrypoints)
+            {
+                Lookup(_database.ByEntrypoint, entrypoint.ToLowerInvariant(), r =>
+                    hit(r, $"{mod.MetadataFile ?? "Mod metadata"} declares a \"{entrypoint}\" entrypoint{(mod.ModId is null ? string.Empty : $" (mod id \"{mod.ModId}\")")}", entrypoint, mod.MetadataFile));
+            }
         }
 
         foreach (var package in archive.ClassPackages)
@@ -231,8 +240,7 @@ public sealed class RuleMatcher
             return false;
         }
 
-        return definition.FileExtensions.Count == 0 ||
-               definition.FileExtensions.Contains(observation.Extension, StringComparer.OrdinalIgnoreCase);
+        return observation.HasExtension(definition.FileExtensions);
     }
 
     private bool IsInsideTemplateLocation(IndicatorRef reference, string path)
@@ -286,24 +294,24 @@ public sealed class RuleMatcher
         }
     }
 
-    internal static Classification? EvaluateLevel(ClassificationDefinition classification, IReadOnlySet<string> matched)
+    internal static Classification? EvaluateLevel(ClassificationDefinition classification, IReadOnlySet<string> matched, bool absenceIsMeaningful = true)
     {
-        if (Any(classification.KnownMatch, matched))
+        if (Any(classification.KnownMatch, matched, absenceIsMeaningful))
         {
             return Classification.KnownMatch;
         }
 
-        if (Any(classification.HighConfidenceSuspicion, matched))
+        if (Any(classification.HighConfidenceSuspicion, matched, absenceIsMeaningful))
         {
             return Classification.HighConfidenceSuspicion;
         }
 
-        if (Any(classification.NeedsReview, matched))
+        if (Any(classification.NeedsReview, matched, absenceIsMeaningful))
         {
             return Classification.NeedsReview;
         }
 
-        if (Any(classification.LikelyLegitimate, matched))
+        if (Any(classification.LikelyLegitimate, matched, absenceIsMeaningful))
         {
             return Classification.LikelyLegitimate;
         }
@@ -311,11 +319,16 @@ public sealed class RuleMatcher
         return null;
     }
 
-    private static bool Any(List<ConditionDefinition>? conditions, IReadOnlySet<string> matched) =>
-        conditions is not null && conditions.Any(c => Satisfied(c, matched));
+    private static bool Any(List<ConditionDefinition>? conditions, IReadOnlySet<string> matched, bool absenceIsMeaningful) =>
+        conditions is not null && conditions.Any(c => Satisfied(c, matched, absenceIsMeaningful));
 
-    internal static bool Satisfied(ConditionDefinition condition, IReadOnlySet<string> matched)
+    internal static bool Satisfied(ConditionDefinition condition, IReadOnlySet<string> matched, bool absenceIsMeaningful = true)
     {
+        if (condition.None is not null && (!absenceIsMeaningful || condition.None.Any(matched.Contains)))
+        {
+            return false;
+        }
+
         if (condition.All is not null && !condition.All.All(matched.Contains))
         {
             return false;

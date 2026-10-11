@@ -18,6 +18,8 @@
     <WrapPanel Grid.Row="1" Margin="{StaticResource Space.Gap}">
       <Button Content="_Quarantine selected…" Style="{StaticResource Button.Primary}" Command="{Binding QuarantineSelectedCommand}"
               ToolTip="Moves the ticked items (or the highlighted item) into quarantine after confirmation. Reversible." />
+      <Button Content="_Delete permanently…" Style="{StaticResource Button.Danger}" Command="{Binding DeleteSelectedCommand}"
+              ToolTip="Deletes the ticked (or highlighted) items forever after you confirm the exact list and type DELETE. Each file is verified before it is removed." />
       <Button Content="_Verify cleanup" Command="{Binding VerifyCommand}" ToolTip="Rescans the folders of the original findings and compares the results by path and hash." />
       <Button Content="E_xport report…" Command="{Binding ExportReportCommand}" />
       <Button Content="Tick _all" Command="{Binding SelectAllCommand}" ToolTip="Ticks every visible item that can be quarantined." />
@@ -166,6 +168,14 @@
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
+
+              <Border Visibility="{Binding Selected.ManualCleanupGuidance, Converter={StaticResource HasValueToVisibility}}"
+                      BorderBrush="{DynamicResource Brush.Warning}" BorderThickness="2,0,0,0" Padding="8,4" Margin="0,8,0,0">
+                <StackPanel>
+                  <TextBlock Text="Remove manually" Style="{StaticResource Text.Label}" Margin="0" />
+                  <TextBlock Text="{Binding Selected.ManualCleanupGuidance, Mode=OneWay}" Style="{StaticResource Text.Body}" TextWrapping="Wrap" />
+                </StackPanel>
+              </Border>
 
               <TextBlock Text="Limitations" Style="{StaticResource Text.Label}" />
               <ItemsControl ItemsSource="{Binding Selected.Limitations}" Focusable="False">

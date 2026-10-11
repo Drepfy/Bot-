@@ -27,6 +27,12 @@ public sealed class ScanEngine
 {
     private const int MaxRecordedSkips = 5000;
 
+    /// <summary>In Downloads and Desktop only programs and archives are inspected, never documents or pictures.</summary>
+    private static readonly HashSet<string> DownloadExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".jar", ".zip", ".litemod", ".exe", ".dll", ".rar", ".7z",
+    };
+
     private readonly Func<AppConfiguration> _config;
     private readonly Func<CompiledRuleDatabase> _rules;
     private readonly ScanResultCache _cache;
@@ -34,9 +40,11 @@ public sealed class ScanEngine
     private readonly TimeProvider _time;
     private readonly LocationTemplateResolver _resolver;
     private readonly Func<(IReadOnlyList<StartupEntry> Entries, string? Error)> _startupReader;
+    private readonly Func<(IReadOnlyList<StartupEntry> Entries, string? Error)> _javaEnvironmentReader;
 
     public ScanEngine(Func<AppConfiguration> config, Func<CompiledRuleDatabase> rules, ScanResultCache cache, ILogger<ScanEngine>? logger = null,
-        TimeProvider? time = null, LocationTemplateResolver? resolver = null, Func<(IReadOnlyList<StartupEntry>, string?)>? startupReader = null)
+        TimeProvider? time = null, LocationTemplateResolver? resolver = null, Func<(IReadOnlyList<StartupEntry>, string?)>? startupReader = null,
+        Func<(IReadOnlyList<StartupEntry>, string?)>? javaEnvironmentReader = null)
     {
         _config = config;
         _rules = rules;
@@ -47,6 +55,11 @@ public sealed class ScanEngine
         _startupReader = startupReader ?? (() =>
         {
             var entries = StartupInspector.ReadCurrentUserRunKey(out var error);
+            return (entries, error);
+        });
+        _javaEnvironmentReader = javaEnvironmentReader ?? (() =>
+        {
+            var entries = JavaEnvironmentInspector.Read(out var error);
             return (entries, error);
         });
     }
@@ -104,6 +117,12 @@ public sealed class ScanEngine
             {
                 context.Stage = ScanStage.CheckingSystemArtifacts;
                 InspectStartupEntries(context);
+            }
+
+            if (scope.LaunchSettingsFiles.Count > 0 || scope.IncludeJavaEnvironment)
+            {
+                context.Stage = ScanStage.CheckingSystemArtifacts;
+                InspectLaunchSettings(context);
             }
 
             cancellationToken.ThrowIfCancellationRequested();
@@ -249,9 +268,14 @@ public sealed class ScanEngine
                     continue;
                 }
 
-                var isCandidate = root.Kind == ScanRootKind.SystemArtifactLocation ||
-                                  extensions.Contains(Path.GetExtension(item.Path)) ||
-                                  context.KnownLocations.HitsByPathKey.ContainsKey(key);
+                var extension = Path.GetExtension(item.Path);
+                var isCandidate = root.Kind is ScanRootKind.SystemArtifactLocation or ScanRootKind.ReferencedFile ||
+                                  context.KnownLocations.HitsByPathKey.ContainsKey(key) ||
+                                  (root.Kind == ScanRootKind.DownloadLocation
+                                      ? DownloadExtensions.Contains(extension)
+                                      : extensions.Contains(extension)) ||
+                                  (root.Kind != ScanRootKind.DownloadLocation && config.Scan.InspectArchives && config.Scan.DetectArchivesByContent &&
+                                   ArchiveSniffer.LooksLikeArchive(item.Path, item.Size));
                 if (!isCandidate)
                 {
                     Interlocked.Increment(ref context.FilesNotApplicable);
@@ -346,6 +370,13 @@ public sealed class ScanEngine
         var isArchive = config.Scan.InspectArchives && ArchiveInspector.IsArchiveExtension(observation.Extension);
         using (var stream = new FileStream(item.Path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 4096, FileOptions.SequentialScan))
         {
+            if (!isArchive && config.Scan.InspectArchives && config.Scan.DetectArchivesByContent && ArchiveSniffer.StartsWithZipSignature(stream))
+            {
+                // A jar or zip with another name (for example "client.jar.disabled"): inspect it like a jar.
+                isArchive = true;
+                observation.ContentIsArchive = true;
+            }
+
             if (config.Detection.HashVerification)
             {
                 var hashes = FileHasher.Compute(stream, config.Detection.ComputeSha1, bufferSize, token);
@@ -403,6 +434,17 @@ public sealed class ScanEngine
 
         Interlocked.Increment(ref context.FilesInspected);
         var finding = Classify(context, observation);
+        if (finding is not null && observation.ContentIsArchive)
+        {
+            finding.Evidence.Add(new Evidence
+            {
+                Kind = IndicatorType.Metadata,
+                Description = $"The file is a JAR/ZIP archive although its name ends in '{(observation.Extension.Length > 0 ? observation.Extension : "(no extension)")}'. It may have been renamed or disabled; it was inspected like a jar.",
+                MatchedValue = observation.Name,
+                Strength = EvidenceStrength.Weak,
+            });
+        }
+
         if (finding is null && !observation.InspectionIncomplete && observation.Sha256 is not null)
         {
             _cache.MarkClean(pathKey, size, lastWrite, observation.Sha256, context.CacheContext);
@@ -489,6 +531,59 @@ public sealed class ScanEngine
         }
 
         context.Notes.Add($"{entries.Count} per-user startup entr{(entries.Count == 1 ? "y was" : "ies were")} inspected (read-only).");
+    }
+
+    /// <summary>
+    /// Reports JVM options that load extra code (Java agents and similar) from launcher settings and the Java
+    /// environment variables. The files those options load were added to the scan scope by <see cref="ScanScopeBuilder"/>.
+    /// </summary>
+    private void InspectLaunchSettings(RunContext context)
+    {
+        var entries = new List<StartupEntry>();
+        var filesWithOptions = 0;
+        foreach (var file in context.Scope.LaunchSettingsFiles)
+        {
+            context.Cancellation.ThrowIfCancellationRequested();
+            var arguments = LaunchSettingsInspector.InspectFile(file, out var problem);
+            if (problem is not null)
+            {
+                context.Notes.Add(problem);
+            }
+
+            if (arguments.Count > 0)
+            {
+                filesWithOptions++;
+                entries.AddRange(LaunchSettingsInspector.ToEntries(file, arguments));
+            }
+        }
+
+        var environmentVariables = 0;
+        if (context.Scope.IncludeJavaEnvironment)
+        {
+            var (environment, error) = _javaEnvironmentReader();
+            if (error is not null)
+            {
+                context.Notes.Add(error);
+            }
+
+            environmentVariables = environment.Count;
+            entries.AddRange(environment);
+        }
+
+        foreach (var entry in entries)
+        {
+            context.Cancellation.ThrowIfCancellationRequested();
+            Classify(context, new ItemObservation
+            {
+                Path = $@"{entry.Source}\{entry.Name}",
+                Name = entry.Name,
+                IsSystemArtifact = true,
+                StartupEntry = entry,
+            });
+        }
+
+        context.Notes.Add($"{context.Scope.LaunchSettingsFiles.Count} launcher settings file(s) were read for Java agent options (read-only); {filesWithOptions} contained such options." +
+                          (context.Scope.IncludeJavaEnvironment ? $" {environmentVariables} Java environment variable(s) are set." : string.Empty));
     }
 
     private void InspectRunningProcesses(RunContext context, ScanSession session)
@@ -706,7 +801,7 @@ public sealed class ScanEngine
             var text = string.Join("|",
                 database.Sha256,
                 string.Join(",", config.Detection.EnabledCategories.Order()),
-                config.Scan.InspectArchives, config.Scan.InspectBytecode, config.Scan.MaxClassFileKilobytes,
+                config.Scan.InspectArchives, config.Scan.InspectBytecode, config.Scan.MaxClassFileKilobytes, config.Scan.DetectArchivesByContent,
                 config.Detection.HashVerification, config.Detection.ComputeSha1, config.Detection.ReportLikelyLegitimate,
                 config.Scan.ArchiveLimits.MaxEntries, config.Scan.ArchiveLimits.MaxNestedArchiveDepth,
                 string.Join(",", config.Detection.TrustedExclusions.Select(e => e.Sha256 + e.Path)));

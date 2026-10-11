@@ -175,6 +175,12 @@ public sealed class ConditionDefinition
     public List<string>? Any { get; set; }
 
     public List<CountDefinition>? Counts { get; set; }
+
+    /// <summary>
+    /// None of these indicators may match. Only allowed together with a positive part (all/any/counts), and never
+    /// satisfied when the item could not be fully inspected, because then a missing indicator proves nothing.
+    /// </summary>
+    public List<string>? None { get; set; }
 }
 
 public sealed class CountDefinition

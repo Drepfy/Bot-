@@ -91,6 +91,9 @@ public enum IndicatorType
     StartupCommandPattern,
     AuthenticodeSignature,
     Metadata,
+
+    /// <summary>An entrypoint key declared in Fabric/Quilt mod metadata (for example "meteor" for Meteor Client add-ons).</summary>
+    ModEntrypoint,
 }
 
 /// <summary>Detection categories that can be enabled or disabled in configuration.</summary>
@@ -198,6 +201,14 @@ public enum LauncherKind
     BadlionClient,
     FeatherClient,
     Custom,
+
+    /// <summary>A launcher whose data folder uses the MultiMC instance format (forks such as PollyMC or UltimMC).</summary>
+    MultiMcCompatible,
+
+    TechnicLauncher,
+
+    /// <summary>A game folder found by the folder search that no known launcher lists (portable launchers, copies, other drives).</summary>
+    Unlisted,
 }
 
 public enum ScanRootKind
@@ -205,6 +216,12 @@ public enum ScanRootKind
     Installation,
     CustomDirectory,
     SystemArtifactLocation,
+
+    /// <summary>A file referenced by launch settings (for example a Java agent), scanned wherever it is stored.</summary>
+    ReferencedFile,
+
+    /// <summary>Common download locations (Downloads, Desktop) checked for cheat and malware files.</summary>
+    DownloadLocation,
 }
 
 public enum OperationType

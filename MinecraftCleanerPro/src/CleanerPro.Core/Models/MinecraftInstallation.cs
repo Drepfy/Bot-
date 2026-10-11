@@ -28,6 +28,9 @@ public sealed record MinecraftInstallation
     /// <summary>Parsing problems or other limitations found while discovering this installation.</summary>
     public IReadOnlyList<string> Notes { get; init; } = [];
 
+    /// <summary>Launcher settings files that can add JVM arguments (for example Java agents) when this installation starts.</summary>
+    public IReadOnlyList<string> LaunchSettingsFiles { get; init; } = [];
+
     public DateTimeOffset? LastInspectedUtc { get; init; }
 }
 

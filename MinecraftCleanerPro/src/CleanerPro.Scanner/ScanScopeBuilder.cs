@@ -7,24 +7,54 @@ using CleanerPro.Infrastructure;
 
 namespace CleanerPro.Scanner;
 
+/// <summary>A user folder where downloaded cheats or malware commonly end up.</summary>
+public sealed record DownloadLocation(string Path, string Label);
+
 /// <summary>
 /// Builds the explicit scope of a scan so it can be shown to the user before anything is read.
-/// Drives are never scanned implicitly; only discovered installations, folders the user added and
-/// documented system locations are included.
+/// Drives are never scanned implicitly; only discovered installations, folders the user added,
+/// documented system locations, files referenced by launch settings and (for Full scans) the top levels
+/// of Downloads and Desktop are included.
 /// </summary>
 public sealed class ScanScopeBuilder
 {
+    /// <summary>Downloads and Desktop are only checked this many folder levels deep.</summary>
+    public const int DownloadLocationDepth = 2;
+
     private readonly Func<AppConfiguration> _config;
     private readonly Func<CompiledRuleDatabase> _rules;
     private readonly AppPaths _paths;
     private readonly LocationTemplateResolver _resolver;
+    private readonly Func<IReadOnlyList<Infrastructure.Platform.StartupEntry>> _javaEnvironment;
+    private readonly Func<IReadOnlyList<DownloadLocation>> _downloadLocations;
 
-    public ScanScopeBuilder(Func<AppConfiguration> config, Func<CompiledRuleDatabase> rules, AppPaths paths, LocationTemplateResolver? resolver = null)
+    public ScanScopeBuilder(Func<AppConfiguration> config, Func<CompiledRuleDatabase> rules, AppPaths paths, LocationTemplateResolver? resolver = null,
+        Func<IReadOnlyList<Infrastructure.Platform.StartupEntry>>? javaEnvironment = null, Func<IReadOnlyList<DownloadLocation>>? downloadLocations = null)
     {
         _config = config;
         _rules = rules;
         _paths = paths;
         _resolver = resolver ?? new LocationTemplateResolver();
+        _javaEnvironment = javaEnvironment ?? (() => Infrastructure.Platform.JavaEnvironmentInspector.Read(out _));
+        _downloadLocations = downloadLocations ?? DefaultDownloadLocations;
+    }
+
+    public static IReadOnlyList<DownloadLocation> DefaultDownloadLocations()
+    {
+        var result = new List<DownloadLocation>();
+        var profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile, Environment.SpecialFolderOption.DoNotVerify);
+        if (!string.IsNullOrEmpty(profile))
+        {
+            result.Add(new DownloadLocation(Path.Combine(profile, "Downloads"), "Downloads"));
+        }
+
+        var desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory, Environment.SpecialFolderOption.DoNotVerify);
+        if (!string.IsNullOrEmpty(desktop))
+        {
+            result.Add(new DownloadLocation(desktop, "Desktop"));
+        }
+
+        return result;
     }
 
     public ScanScope Build(ScanMode mode, DiscoveryResult discovery, IReadOnlyList<string>? customRoots = null)
@@ -68,6 +98,55 @@ public sealed class ScanScopeBuilder
             roots.AddRange(resolution.Roots);
         }
 
+        if (mode == ScanMode.Full && config.Scan.IncludeDownloadLocations)
+        {
+            foreach (var location in _downloadLocations())
+            {
+                if (Path.IsPathFullyQualified(location.Path) && Directory.Exists(location.Path))
+                {
+                    roots.Add(new ScanRoot
+                    {
+                        Path = PathKey.NormalizeFullPath(location.Path),
+                        Kind = ScanRootKind.DownloadLocation,
+                        Reason = $"Your {location.Label} folder ({DownloadLocationDepth} levels deep): only .jar, .zip, .exe, .dll, .rar and .7z files are checked",
+                        MaxDepth = DownloadLocationDepth,
+                    });
+                }
+            }
+        }
+
+        // Launcher settings that can load code from outside the mods folder (for example "-javaagent").
+        var launchSettings = new List<string>();
+        var inspectLaunch = mode is ScanMode.Quick or ScanMode.Full && config.Scan.InspectLaunchSettings;
+        if (inspectLaunch)
+        {
+            var selected = SelectInstallations(discovery, config).ToList();
+            foreach (var installation in selected)
+            {
+                launchSettings.AddRange(installation.LaunchSettingsFiles.Where(File.Exists));
+            }
+
+            launchSettings = launchSettings.Distinct(PathKey.Comparer).ToList();
+            foreach (var file in launchSettings)
+            {
+                var folder = Path.GetDirectoryName(file);
+                foreach (var argument in LaunchSettingsInspector.InspectFile(file, out _))
+                {
+                    var bases = selected.Where(i => folder is not null && (PathKey.IsSameOrWithin(i.RootPath, folder) || PathKey.IsSameOrWithin(folder, i.RootPath)))
+                        .Select(i => i.RootPath).Append(folder).OfType<string>();
+                    AddReferencedFile(roots, LaunchSettingsInspector.ResolveExistingFile(argument.TargetPath, bases), $"Loaded by {argument.Option} in {Path.GetFileName(file)}");
+                }
+            }
+
+            foreach (var variable in _javaEnvironment())
+            {
+                foreach (var argument in LaunchSettingsInspector.FindAgentArguments(variable.Command))
+                {
+                    AddReferencedFile(roots, LaunchSettingsInspector.ResolveExistingFile(argument.TargetPath, []), $"Loaded by {argument.Option} in the {variable.Name} environment variable");
+                }
+            }
+        }
+
         var excluded = new List<string>(config.Scan.ExcludedDirectories.Where(Path.IsPathFullyQualified))
         {
             _paths.DataRoot,
@@ -90,7 +169,36 @@ public sealed class ScanScopeBuilder
             IncludeSystemArtifactChecks = includeSystem,
             IncludeStartupInspection = mode is ScanMode.Quick or ScanMode.Full && config.Scan.InspectStartupEntries && OperatingSystem.IsWindows(),
             IncludeProcessInspection = config.Scan.InspectRunningProcesses,
+            LaunchSettingsFiles = launchSettings,
+            IncludeJavaEnvironment = inspectLaunch,
         };
+    }
+
+    /// <summary>
+    /// The scan's locations approved for cleanup. A single-file location (for example a referenced Java agent) is
+    /// approved through its folder, because the safety policy never lets a whole scan location itself be removed;
+    /// the cleanup target is still the exact file of the finding.
+    /// </summary>
+    public static List<string> CleanupApprovedRoots(ScanScope scope) =>
+        scope.Roots.Select(r => r.IsFile ? Path.GetDirectoryName(r.Path) : r.Path).OfType<string>()
+            .Concat(scope.Roots.Select(r => r.InstallationRoot).OfType<string>())
+            .Distinct(PathKey.Comparer).ToList();
+
+    private static void AddReferencedFile(List<ScanRoot> roots, string? path, string reason)
+    {
+        if (path is null)
+        {
+            return;
+        }
+
+        roots.Add(new ScanRoot
+        {
+            Path = path,
+            Kind = ScanRootKind.ReferencedFile,
+            Reason = reason,
+            Recursive = false,
+            IsFile = true,
+        });
     }
 
     /// <summary>Scope for a post-cleanup verification: the folders that contained the original findings.</summary>
@@ -134,6 +242,8 @@ public sealed class ScanScopeBuilder
             IncludeSystemArtifactChecks = original.Scope.IncludeSystemArtifactChecks,
             IncludeStartupInspection = original.Scope.IncludeStartupInspection,
             IncludeProcessInspection = false,
+            LaunchSettingsFiles = original.Scope.LaunchSettingsFiles,
+            IncludeJavaEnvironment = original.Scope.IncludeJavaEnvironment,
         };
     }
 

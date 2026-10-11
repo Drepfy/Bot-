@@ -9,12 +9,47 @@ namespace CleanerPro.Scanner.Discovery;
 /// <summary>Base folders used for discovery. Replaceable so discovery can be tested against temporary folders.</summary>
 public sealed record DiscoveryEnvironment(string? RoamingAppData, string? LocalAppData, string? UserProfile)
 {
+    /// <summary>Roots of local fixed drives, searched (folder names only, a few levels deep) for unlisted game folders.</summary>
+    public IReadOnlyList<string> FixedDrives { get; init; } = [];
+
+    /// <summary>Folders never searched for unlisted installations (this application's own data, for example).</summary>
+    public IReadOnlyList<string> SearchExclusions { get; init; } = [];
+
     public static DiscoveryEnvironment Current() => new(
         NullIfEmpty(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData, Environment.SpecialFolderOption.DoNotVerify)),
         NullIfEmpty(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData, Environment.SpecialFolderOption.DoNotVerify)),
-        NullIfEmpty(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile, Environment.SpecialFolderOption.DoNotVerify)));
+        NullIfEmpty(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile, Environment.SpecialFolderOption.DoNotVerify)))
+    {
+        FixedDrives = LocalFixedDrives(),
+    };
+
+    private static List<string> LocalFixedDrives()
+    {
+        try
+        {
+            return DriveInfo.GetDrives().Where(d => d.DriveType == DriveType.Fixed && d.IsReady).Select(d => d.RootDirectory.FullName).ToList();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return [];
+        }
+    }
 
     private static string? NullIfEmpty(string value) => string.IsNullOrEmpty(value) ? null : value;
+}
+
+/// <summary>Limits for the search for game folders that no known launcher lists.</summary>
+public sealed record UnlistedSearchOptions
+{
+    public int AppDataDepth { get; init; } = 4;
+
+    public int UserProfileDepth { get; init; } = 4;
+
+    public int DriveDepth { get; init; } = 3;
+
+    public int MaxDirectories { get; init; } = 60_000;
+
+    public TimeSpan TimeLimit { get; init; } = TimeSpan.FromSeconds(20);
 }
 
 /// <summary>
@@ -63,10 +98,26 @@ public sealed class InstallationDiscoveryService
             return Directory.Exists(path) ? path : null;
         }
 
-        // Official launcher (and launchers that share the default .minecraft folder).
+        // Official launcher (and launchers that share the default .minecraft folder, such as TLauncher, SKLauncher and HMCL).
         if (Check(_environment.RoamingAppData, ".minecraft") is { } dotMinecraft)
         {
             DiscoverOfficial(dotMinecraft, Add, notes);
+        }
+
+        // Microsoft Store (MSIX) apps can have their AppData redirected into their package folder. Any package with a
+        // redirected .minecraft folder is listed; package names are not guessed.
+        if (Check(_environment.LocalAppData, "Packages") is { } packages)
+        {
+            foreach (var package in QuietDirectories(packages))
+            {
+                var redirected = Path.Combine(package, "LocalCache", "Roaming", ".minecraft");
+                if (Directory.Exists(redirected) && LooksLikeGameFolder(redirected))
+                {
+                    checkedLocations.Add(redirected);
+                    Add(CreateGameInstallation($"Microsoft Store app data: {Path.GetFileName(package)}", LauncherKind.OfficialLauncher, redirected,
+                        "Redirected .minecraft folder inside a Microsoft Store app package", []));
+                }
+            }
         }
 
         // Prism Launcher and its MultiMC-format relatives.
@@ -75,6 +126,26 @@ public sealed class InstallationDiscoveryService
             if (Check(_environment.RoamingAppData, folder) is { } prism)
             {
                 DiscoverMultiMcFormat(prism, kind, label, Add, notes);
+            }
+        }
+
+        // Other launchers that use the MultiMC instance format (forks such as PollyMC, Fjord or UltimMC) are recognised
+        // by their layout: a folder with "instances/<name>/instance.cfg". No launcher names are guessed.
+        var multiMcFolders = new HashSet<string>(["PrismLauncher", "PolyMC", "MultiMC"], StringComparer.OrdinalIgnoreCase);
+        foreach (var baseFolder in new[] { _environment.RoamingAppData, _environment.LocalAppData, _environment.UserProfile })
+        {
+            if (baseFolder is null || !Directory.Exists(baseFolder))
+            {
+                continue;
+            }
+
+            foreach (var candidate in QuietDirectories(baseFolder).Where(d => !multiMcFolders.Contains(Path.GetFileName(d))))
+            {
+                if (HasMultiMcInstances(candidate))
+                {
+                    checkedLocations.Add(candidate);
+                    DiscoverMultiMcFormat(candidate, LauncherKind.MultiMcCompatible, $"{Path.GetFileName(candidate)} (MultiMC-format launcher)", Add, notes);
+                }
             }
         }
 
@@ -108,6 +179,16 @@ public sealed class InstallationDiscoveryService
                     var gameDir = Directory.Exists(Path.Combine(instance, "instance")) ? Path.Combine(instance, "instance") : instance;
                     Add(CreateGameInstallation($"{label}: {Path.GetFileName(instance)}", kind, gameDir, $"{label} instance folder", []));
                 }
+            }
+        }
+
+        // Technic Launcher keeps its data in %APPDATA%\.technic (OperatingSystem.getTechnicDirectory in its source).
+        // Modpack game folders inside it are recognised by their layout rather than by an assumed sub-path.
+        if (Check(_environment.RoamingAppData, ".technic") is { } technic)
+        {
+            foreach (var gameDir in GameFoldersUnder(technic, maxDepth: 3))
+            {
+                Add(CreateGameInstallation($"Technic Launcher: {Path.GetFileName(gameDir)}", LauncherKind.TechnicLauncher, gameDir, "Game folder inside the Technic Launcher data folder", []));
             }
         }
 
@@ -166,6 +247,7 @@ public sealed class InstallationDiscoveryService
     private void DiscoverOfficial(string dotMinecraft, Action<MinecraftInstallation> add, List<string> notes)
     {
         add(CreateGameInstallation("Minecraft (default game directory)", LauncherKind.OfficialLauncher, dotMinecraft, "Default .minecraft folder", []));
+        var profileFiles = new[] { "launcher_profiles.json", "launcher_profiles_microsoft_store.json" }.Select(f => Path.Combine(dotMinecraft, f)).Where(File.Exists).ToList();
 
         foreach (var profileFile in new[] { "launcher_profiles.json", "launcher_profiles_microsoft_store.json" })
         {
@@ -211,7 +293,7 @@ public sealed class InstallationDiscoveryService
                         : profile.Name;
                     var versionId = value.TryGetProperty("lastVersionId", out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
                     add(CreateGameInstallation($"Launcher profile: {name}", LauncherKind.OfficialLauncher, PathKey.NormalizeFullPath(gameDir),
-                        $"gameDir in {profileFile}", LoadersFromVersionId(versionId)));
+                        $"gameDir in {profileFile}", LoadersFromVersionId(versionId), profileFiles));
                 }
             }
             catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
@@ -224,13 +306,11 @@ public sealed class InstallationDiscoveryService
     private void DiscoverMultiMcFormat(string launcherFolder, LauncherKind kind, string label, Action<MinecraftInstallation> add, List<string> notes)
     {
         var instancesDir = Path.Combine(launcherFolder, "instances");
-        foreach (var configName in new[] { "prismlauncher.cfg", "polymc.cfg", "multimc.cfg" })
+
+        // The launcher-wide settings file ("<launcher>.cfg") holds the global JvmArgs that every instance inherits.
+        var globalSettings = QuietFiles(launcherFolder, "*.cfg").ToList();
+        foreach (var configPath in globalSettings)
         {
-            var configPath = Path.Combine(launcherFolder, configName);
-            if (!File.Exists(configPath))
-            {
-                continue;
-            }
 
             try
             {
@@ -242,7 +322,7 @@ public sealed class InstallationDiscoveryService
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                notes.Add($"{label}: {configName} could not be read ({ex.Message}); using the default instances folder.");
+                notes.Add($"{label}: {Path.GetFileName(configPath)} could not be read ({ex.Message}); using the default instances folder.");
             }
         }
 
@@ -309,7 +389,7 @@ public sealed class InstallationDiscoveryService
                 }
             }
 
-            add(CreateGameInstallation($"{label}: {name}", kind, gameDir, $"{label} instance.cfg", loaders) with { MinecraftVersion = minecraftVersion });
+            add(CreateGameInstallation($"{label}: {name}", kind, gameDir, $"{label} instance.cfg", loaders, globalSettings) with { MinecraftVersion = minecraftVersion });
         }
     }
 
@@ -374,7 +454,8 @@ public sealed class InstallationDiscoveryService
         }
     }
 
-    private MinecraftInstallation CreateGameInstallation(string name, LauncherKind launcher, string gameDir, string discoveredBy, IReadOnlyList<ModLoader> knownLoaders)
+    private MinecraftInstallation CreateGameInstallation(string name, LauncherKind launcher, string gameDir, string discoveredBy, IReadOnlyList<ModLoader> knownLoaders,
+        IEnumerable<string>? extraSettingsFiles = null)
     {
         var loaders = knownLoaders.Count > 0 ? knownLoaders.Distinct().ToList() : DetectLoaders(gameDir);
         var notes = new List<string>();
@@ -395,7 +476,246 @@ public sealed class InstallationDiscoveryService
             DefaultExcludedSubdirectories = GameDefaultExcluded,
             Notes = notes,
             LastInspectedUtc = _time.GetUtcNow(),
+            LaunchSettingsFiles = FindLaunchSettings(gameDir, extraSettingsFiles),
         };
+    }
+
+    /// <summary>Known launcher settings files in the game directory and the folder above it (instance folders keep them there).</summary>
+    internal static List<string> FindLaunchSettings(string gameDir, IEnumerable<string>? extra = null)
+    {
+        var files = new List<string>(extra ?? []);
+        var parent = Path.GetDirectoryName(PathKey.TrimTrailingSeparators(gameDir));
+        foreach (var folder in new[] { gameDir, parent })
+        {
+            if (folder is null)
+            {
+                continue;
+            }
+
+            foreach (var name in LaunchSettingsInspector.KnownSettingsFileNames)
+            {
+                var candidate = Path.Combine(folder, name);
+                if (File.Exists(candidate))
+                {
+                    files.Add(PathKey.NormalizeFullPath(candidate));
+                }
+            }
+        }
+
+        return files.Distinct(PathKey.Comparer).ToList();
+    }
+
+    /// <summary>
+    /// Searches the user profile, AppData and the top levels of local drives for Minecraft game folders that no known
+    /// launcher lists. Only folder and file names are checked; nothing is opened. Folders already known are skipped.
+    /// </summary>
+    public DiscoveryResult SearchForUnlisted(IReadOnlyCollection<string> knownRoots, UnlistedSearchOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        options ??= new UnlistedSearchOptions();
+        var found = new Dictionary<string, MinecraftInstallation>(PathKey.Comparer);
+        var notes = new List<string>();
+        var known = knownRoots.Select(PathKey.NormalizeFullPath).ToList();
+        var excluded = _environment.SearchExclusions.Where(Path.IsPathFullyQualified).Select(PathKey.NormalizeFullPath).ToList();
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var visited = 0;
+        var stoppedEarly = false;
+
+        var roots = new List<(string Path, int Depth)>();
+        foreach (var folder in new[] { _environment.RoamingAppData, _environment.LocalAppData })
+        {
+            if (folder is not null)
+            {
+                roots.Add((folder, options.AppDataDepth));
+            }
+        }
+
+        if (_environment.UserProfile is { } profile)
+        {
+            roots.Add((profile, options.UserProfileDepth));
+        }
+
+        roots.AddRange(_environment.FixedDrives.Select(d => (d, options.DriveDepth)));
+
+        // Everything under the user profile except AppData is covered by the profile root; AppData has its own roots.
+        var appData = _environment.UserProfile is null ? null : Path.Combine(_environment.UserProfile, "AppData");
+
+        foreach (var (rootPath, depthLimit) in roots)
+        {
+            if (!Directory.Exists(rootPath))
+            {
+                continue;
+            }
+
+            var stack = new Stack<(string Path, int Depth)>();
+            stack.Push((rootPath, 0));
+            while (stack.Count > 0)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (visited >= options.MaxDirectories || clock.Elapsed > options.TimeLimit)
+                {
+                    stoppedEarly = true;
+                    break;
+                }
+
+                var (directory, depth) = stack.Pop();
+                visited++;
+
+                if (known.Any(k => PathKey.IsSameOrWithin(directory, k)) || excluded.Any(e => PathKey.IsSameOrWithin(directory, e)) ||
+                    found.Keys.Any(f => PathKey.IsSameOrWithin(directory, f)))
+                {
+                    continue;
+                }
+
+                if (depth > 0 && HasMultiMcInstances(directory))
+                {
+                    // A portable MultiMC-format launcher: its instances are read from instance.cfg, so the folder is not searched further.
+                    DiscoverMultiMcFormat(directory, LauncherKind.MultiMcCompatible, $"{Path.GetFileName(directory)} (MultiMC-format launcher)", i => found.TryAdd(i.RootPath, i), notes);
+                    continue;
+                }
+
+                if (depth > 0 && LooksLikeGameFolder(directory))
+                {
+                    var installation = CreateGameInstallation($"Unlisted game folder: {DisplayName(directory)}", LauncherKind.Unlisted, directory,
+                        "Folder search: the folder contains Minecraft's options.txt and game folders", []);
+                    found.TryAdd(installation.RootPath, installation with
+                    {
+                        Notes = [.. installation.Notes, "No known launcher lists this folder. It may belong to a portable or less common launcher, or be a copy. Untick it if you do not want it scanned."],
+                    });
+                    continue;
+                }
+
+                if (depth >= depthLimit)
+                {
+                    continue;
+                }
+
+                foreach (var child in QuietDirectories(directory).Reverse())
+                {
+                    var name = Path.GetFileName(child);
+                    if (SearchSkippedNames.Contains(name) || (appData is not null && string.Equals(PathKey.TrimTrailingSeparators(child), appData, PathKey.Comparison)))
+                    {
+                        continue;
+                    }
+
+                    stack.Push((child, depth + 1));
+                }
+            }
+
+            if (stoppedEarly)
+            {
+                break;
+            }
+        }
+
+        var installations = found.Values.Where(i => i.Launcher is LauncherKind.Unlisted or LauncherKind.MultiMcCompatible)
+            .DistinctBy(i => PathKey.ToKey(i.RootPath)).ToList();
+        notes.Add(stoppedEarly
+            ? $"The folder search stopped after checking {visited} folders ({clock.Elapsed.TotalSeconds:0} s limit). Add any missing game folder yourself with 'Add folder…'."
+            : $"The folder search checked {visited} folders and found {installations.Count} game folder(s) that no known launcher lists.");
+        return new DiscoveryResult { Installations = installations, Notes = notes, LocationsChecked = roots.Select(r => r.Path).ToList() };
+    }
+
+    /// <summary>Folder names never descended into by the folder search (system, development and cache folders).</summary>
+    private static readonly HashSet<string> SearchSkippedNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Windows", "Program Files", "Program Files (x86)", "ProgramData", "$Recycle.Bin", "System Volume Information", "Recovery", "PerfLogs",
+        "Users", "node_modules", ".git", ".svn", ".gradle", ".m2", ".nuget", ".cache", "Temp", "Packages", "Microsoft", "Google", "Mozilla",
+        "Cache", "Caches", "GPUCache", "Code Cache", "saves", "screenshots", "assets", "libraries", "logs",
+    };
+
+    /// <summary>
+    /// A game folder is named ".minecraft" (and contains game files), or contains Minecraft's options.txt together with at
+    /// least one of the folders the game creates (mods, versions, saves, resourcepacks).
+    /// </summary>
+    internal static bool LooksLikeGameFolder(string directory)
+    {
+        try
+        {
+            var gameFolders = new[] { "mods", "versions", "saves", "resourcepacks" };
+            var hasOptions = File.Exists(Path.Combine(directory, "options.txt"));
+            if (string.Equals(Path.GetFileName(PathKey.TrimTrailingSeparators(directory)), ".minecraft", StringComparison.OrdinalIgnoreCase))
+            {
+                return hasOptions || gameFolders.Any(f => Directory.Exists(Path.Combine(directory, f)));
+            }
+
+            return hasOptions && gameFolders.Any(f => Directory.Exists(Path.Combine(directory, f)));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Game folders below a launcher's data folder, found by layout (not descending into a game folder once found).</summary>
+    private static List<string> GameFoldersUnder(string root, int maxDepth)
+    {
+        var result = new List<string>();
+        var stack = new Stack<(string Path, int Depth)>();
+        stack.Push((root, 0));
+        while (stack.Count > 0 && result.Count < 500)
+        {
+            var (directory, depth) = stack.Pop();
+            if (depth > 0 && LooksLikeGameFolder(directory))
+            {
+                result.Add(PathKey.NormalizeFullPath(directory));
+                continue;
+            }
+
+            if (depth < maxDepth)
+            {
+                foreach (var child in QuietDirectories(directory).Where(d => !SearchSkippedNames.Contains(Path.GetFileName(d))))
+                {
+                    stack.Push((child, depth + 1));
+                }
+            }
+        }
+
+        return result.Order(StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    private static bool HasMultiMcInstances(string folder)
+    {
+        var instances = Path.Combine(folder, "instances");
+        if (!Directory.Exists(instances))
+        {
+            return false;
+        }
+
+        return QuietDirectories(instances).Take(500).Any(i => File.Exists(Path.Combine(i, "instance.cfg")));
+    }
+
+    private static string DisplayName(string directory)
+    {
+        var trimmed = PathKey.TrimTrailingSeparators(directory);
+        var name = Path.GetFileName(trimmed);
+        var parent = Path.GetFileName(Path.GetDirectoryName(trimmed) ?? string.Empty);
+        return string.IsNullOrEmpty(parent) ? name : $"{parent}\\{name}";
+    }
+
+    /// <summary>Lists sub-directories, skipping links and anything unreadable, without adding notes.</summary>
+    private static IEnumerable<string> QuietDirectories(string path)
+    {
+        try
+        {
+            return new DirectoryInfo(path).EnumerateDirectories("*", new EnumerationOptions { IgnoreInaccessible = true, AttributesToSkip = FileAttributes.ReparsePoint })
+                .Select(d => d.FullName).Order(StringComparer.OrdinalIgnoreCase).ToList();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            return [];
+        }
+    }
+
+    private static IEnumerable<string> QuietFiles(string path, string pattern)
+    {
+        try
+        {
+            return Directory.EnumerateFiles(path, pattern, new EnumerationOptions { IgnoreInaccessible = true }).Order(StringComparer.OrdinalIgnoreCase).ToList();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return [];
+        }
     }
 
     /// <summary>Infers installed loaders from version folder names and library folders.</summary>

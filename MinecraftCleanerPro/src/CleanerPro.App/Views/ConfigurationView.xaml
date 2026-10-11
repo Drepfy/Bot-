@@ -62,6 +62,14 @@
         </DockPanel>
         <CheckBox Content="Follow symbolic links and junctions (only into other scan locations)" IsChecked="{Binding Config.Scan.FollowDirectoryLinks, Mode=TwoWay}" />
         <CheckBox Content="Inspect archives (.jar / .zip) without extracting them" IsChecked="{Binding Config.Scan.InspectArchives, Mode=TwoWay}" />
+        <CheckBox Content="Also recognise renamed or disabled jars by their content (for example x.jar.disabled)" IsChecked="{Binding Config.Scan.DetectArchivesByContent, Mode=TwoWay}"
+                  ToolTip="Reads only the first four bytes of other files. Pictures, sounds, world data and office documents are not opened." />
+        <CheckBox Content="Check launcher settings and Java environment variables for Java agents (read-only)" IsChecked="{Binding Config.Scan.InspectLaunchSettings, Mode=TwoWay}"
+                  ToolTip="Finds -javaagent and similar options that load code from outside the mods folder, and scans the files they load." />
+        <CheckBox Content="Full scan: also check the top levels of Downloads and Desktop for cheat and malware files" IsChecked="{Binding Config.Scan.IncludeDownloadLocations, Mode=TwoWay}"
+                  ToolTip="Only .jar, .zip, .exe, .dll, .rar and .7z files are checked, two folder levels deep." />
+        <CheckBox Content="Search for game folders that no known launcher lists (folder names only)" IsChecked="{Binding Config.Scan.SearchForUnlistedInstallations, Mode=TwoWay}"
+                  ToolTip="Runs in the background on the Installations page. Looks at folder names in your user folders and the top levels of local drives; files are never opened." />
         <DockPanel Margin="0,3">
           <TextBlock Text="Archive: maximum entries" Width="320" Style="{StaticResource Text.Body}" VerticalAlignment="Center" />
           <TextBox Text="{Binding Config.Scan.ArchiveLimits.MaxEntries, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" Width="140" HorizontalAlignment="Left" AutomationProperties.Name="Archive: maximum entries" />

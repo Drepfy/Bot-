@@ -39,12 +39,12 @@ public sealed class ScanEngineTests : IDisposable
 
     private ScanEngine Engine(ScanResultCache? cache = null, Func<(IReadOnlyList<StartupEntry>, string?)>? startup = null) =>
         new(() => _config, () => Database, cache ?? new ScanResultCache(Path.Combine(_paths.CacheDirectory, "scan-cache.json")),
-            resolver: Resolver(), startupReader: startup ?? (() => ([], null)));
+            resolver: Resolver(), startupReader: startup ?? (() => ([], null)), javaEnvironmentReader: () => ([], null));
 
     private ScanScope Scope(ScanMode mode = ScanMode.Full)
     {
         var discovery = new InstallationDiscoveryService(new DiscoveryEnvironment(_temp.Combine("Roaming"), _temp.Combine("Local"), _temp.Combine("Profile"))).Discover();
-        return new ScanScopeBuilder(() => _config, () => Database, _paths, Resolver()).Build(mode, discovery);
+        return new ScanScopeBuilder(() => _config, () => Database, _paths, Resolver(), javaEnvironment: () => [], downloadLocations: () => []).Build(mode, discovery);
     }
 
     private void CreateFixtureInstallation()

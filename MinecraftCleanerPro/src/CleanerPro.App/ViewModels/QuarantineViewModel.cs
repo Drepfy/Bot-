@@ -65,6 +65,13 @@ public sealed class QuarantineViewModel : PageViewModel
         VerifyCommand = new AsyncRelayCommand(VerifyAllAsync, () => Items.Count > 0);
         RestoreCommand = new AsyncRelayCommand(RestoreAsync, () => Selected is not null);
         DeleteCommand = new RelayCommand(DeletePermanently, () => Items.Any(i => i.IsSelected) || Selected is not null);
+        SelectAllCommand = new RelayCommand(() => SetSelection(true), () => Items.Count > 0);
+        ClearSelectionCommand = new RelayCommand(() => SetSelection(false), () => Items.Any(i => i.IsSelected));
+        DeleteAllCommand = new RelayCommand(() =>
+        {
+            SetSelection(true);
+            DeletePermanently();
+        }, () => Items.Count > 0);
         OpenFolderCommand = new RelayCommand(() =>
         {
             Directory.CreateDirectory(_quarantine.RootDirectory);
@@ -104,6 +111,20 @@ public sealed class QuarantineViewModel : PageViewModel
     public ICommand RestoreCommand { get; }
 
     public ICommand DeleteCommand { get; }
+
+    public ICommand SelectAllCommand { get; }
+
+    public ICommand ClearSelectionCommand { get; }
+
+    public ICommand DeleteAllCommand { get; }
+
+    private void SetSelection(bool value)
+    {
+        foreach (var item in Items)
+        {
+            item.IsSelected = value;
+        }
+    }
 
     public ICommand OpenFolderCommand { get; }
 

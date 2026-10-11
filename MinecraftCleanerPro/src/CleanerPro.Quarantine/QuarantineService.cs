@@ -464,6 +464,34 @@ public sealed class QuarantineService
         return new DeletionResult(true, $"{succeeded} of {results.Count} item(s) permanently deleted.", results);
     }
 
+    /// <summary>
+    /// "Delete permanently" for a finding: the item is first quarantined through the normal journaled, hash-verified
+    /// path (so the exact scanned file is the one removed, and nothing is lost if the computer crashes halfway), and
+    /// then exactly the copies created by this call are deleted. The caller must already have the user's explicit
+    /// confirmation for this item.
+    /// </summary>
+    public PermanentRemovalResult RemovePermanently(QuarantineRequest request, bool isDirectory, CancellationToken cancellationToken = default)
+    {
+        var quarantined = isDirectory ? QuarantineDirectory(request, cancellationToken) : [Quarantine(request, cancellationToken)];
+        var entryIds = quarantined.Where(r => r.Succeeded && r.Entry is not null).Select(r => r.Entry!.Id).ToList();
+        if (entryIds.Count == 0)
+        {
+            return new PermanentRemovalResult(false,
+                "Nothing was deleted: " + string.Join(" ", quarantined.Select(r => r.Message).Distinct()), quarantined, null);
+        }
+
+        var plan = PrepareDeletion(entryIds);
+        var deletion = ExecuteDeletion(plan, plan.Token);
+        var deleted = deletion.Items.Count(i => i.Succeeded);
+        var allOk = quarantined.All(r => r.Succeeded) && deletion.Executed && deletion.Items.All(i => i.Succeeded);
+        var message = allOk
+            ? $"{deleted} file(s) permanently deleted (each was verified by SHA-256 before removal)."
+            : $"{deleted} file(s) permanently deleted; some could not be removed: " +
+              string.Join(" ", quarantined.Where(r => !r.Succeeded).Select(r => r.Message).Concat(deletion.Items.Where(i => !i.Succeeded).Select(i => i.Message)).Distinct()) +
+              " Files that were quarantined but not deleted remain on the Quarantine page.";
+        return new PermanentRemovalResult(allOk, message, quarantined, deletion);
+    }
+
     // ------------------------------------------------------------------ listing and integrity
 
     public IReadOnlyList<QuarantineEntry> ListEntries(bool includeRestored = false)

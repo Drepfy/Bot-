@@ -55,6 +55,14 @@ public sealed class Finding
 
     public string? QuarantineEntryId { get; set; }
 
+    /// <summary>
+    /// True for findings that cannot be moved to quarantine safely, such as registry entries, environment variables
+    /// or a line inside a launcher's settings file. <see cref="ManualCleanupGuidance"/> explains what to do instead.
+    /// </summary>
+    public bool RequiresManualCleanup { get; init; }
+
+    public string? ManualCleanupGuidance { get; init; }
+
     /// <summary>Stable identifier derived from the normalized path and content hash.</summary>
     public static string CreateId(string normalizedPathKey, string? contentHash)
     {

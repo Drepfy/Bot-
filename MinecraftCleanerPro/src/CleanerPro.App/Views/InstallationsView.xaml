@@ -14,9 +14,16 @@
       <Button Content="_Add folder…" Command="{Binding AddFolderCommand}" ToolTip="Add a game directory, modpack instance or portable installation that was not found automatically." />
       <Button Content="Re_move folder" Command="{Binding RemoveFolderCommand}" ToolTip="Only folders you added yourself can be removed. Nothing is deleted from disk." />
       <Button Content="_Open in Explorer" Command="{Binding OpenFolderCommand}" />
+      <Button Content="_Search for more game folders" Command="{Binding SearchCommand}"
+              ToolTip="Looks at folder names in your user folders and the top levels of local drives to find game folders of portable or less common launchers. Files are never opened." />
+      <Button Content="Stop searc_h" Command="{Binding CancelSearchCommand}" />
     </StackPanel>
 
-    <TextBlock Grid.Row="1" Text="{Binding ScopeExplanation, Mode=OneWay}" Style="{StaticResource Text.Muted}" Margin="{StaticResource Space.Gap}" />
+    <StackPanel Grid.Row="1" Margin="{StaticResource Space.Gap}">
+      <TextBlock Text="{Binding ScopeExplanation, Mode=OneWay}" Style="{StaticResource Text.Muted}" />
+      <TextBlock Text="{Binding SearchStatus, Mode=OneWay}" Style="{StaticResource Text.Muted}" FontStyle="Italic"
+                 Visibility="{Binding SearchStatus, Converter={StaticResource HasValueToVisibility}}" AutomationProperties.LiveSetting="Polite" />
+    </StackPanel>
 
     <Grid Grid.Row="2">
       <DataGrid ItemsSource="{Binding Items}" SelectedItem="{Binding Selected, Mode=TwoWay}" AutomationProperties.Name="Discovered installations">

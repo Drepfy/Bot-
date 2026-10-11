@@ -141,6 +141,7 @@ public partial class App : Application
     private static void RegisterUi(IServiceCollection services)
     {
         services.AddSingleton<AppState>();
+        services.AddSingleton<DiscoveryCoordinator>();
         services.AddSingleton<IDialogService, DialogService>();
         services.AddSingleton<DashboardViewModel>();
         services.AddSingleton<InstallationsViewModel>();

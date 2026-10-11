@@ -92,6 +92,9 @@ public sealed class CompiledRuleDatabase
                     case IndicatorType.BytecodeSignature:
                         BytecodeSignatures.Add(CompileSignature(reference));
                         break;
+                    case IndicatorType.ModEntrypoint:
+                        Add(ByEntrypoint, value.ToLowerInvariant(), reference);
+                        break;
                 }
             }
         }
@@ -133,6 +136,8 @@ public sealed class CompiledRuleDatabase
     internal List<(IndicatorRef Ref, Regex Regex)> StartupPatterns { get; } = [];
 
     internal List<IndicatorRef> ManifestAttributes { get; } = [];
+
+    internal Dictionary<string, List<IndicatorRef>> ByEntrypoint { get; } = new(StringComparer.Ordinal);
 
     public List<KnownLocationIndicator> KnownLocations { get; } = [];
 
@@ -453,6 +458,14 @@ public static partial class RuleDatabaseLoader
                 ValidateBytecode(where, indicator.Bytecode, errors);
                 RequireTarget(RuleTarget.Archive);
                 break;
+            case IndicatorType.ModEntrypoint:
+                if (!EntrypointPattern().IsMatch(value))
+                {
+                    errors.Add($"{where}: invalid entrypoint key.");
+                }
+
+                RequireTarget(RuleTarget.Archive);
+                break;
             default:
                 errors.Add($"{where}: indicator type {indicator.Type} cannot be used in rules.");
                 break;
@@ -537,11 +550,16 @@ public static partial class RuleDatabaseLoader
             {
                 if (condition is null || (condition.All is null && condition.Any is null && condition.Counts is null))
                 {
-                    errors.Add($"{prefix}: an empty {name} condition is not allowed.");
+                    errors.Add($"{prefix}: an empty {name} condition is not allowed{(condition?.None is not null ? " ('none' needs all, any or counts)" : string.Empty)}.");
                     continue;
                 }
 
-                var referenced = (condition.All ?? []).Concat(condition.Any ?? []).Concat((condition.Counts ?? []).SelectMany(c => c?.Of ?? []));
+                if (condition.None is not null && name == "knownMatch")
+                {
+                    errors.Add($"{prefix}: knownMatch conditions cannot rely on missing indicators ('none').");
+                }
+
+                var referenced = (condition.All ?? []).Concat(condition.Any ?? []).Concat(condition.None ?? []).Concat((condition.Counts ?? []).SelectMany(c => c?.Of ?? []));
                 foreach (var id in referenced)
                 {
                     if (!indicatorIds.Contains(id))
@@ -575,6 +593,9 @@ public static partial class RuleDatabaseLoader
 
     [GeneratedRegex("^[a-z0-9_.-]{1,64}$")]
     private static partial Regex ModIdPattern();
+
+    [GeneratedRegex("^[a-z0-9_.:-]{1,64}$")]
+    private static partial Regex EntrypointPattern();
 
     [GeneratedRegex(@"^%[A-Z_][A-Z0-9_]*%([\\/][^\\/:*?""<>|]+)*$", RegexOptions.IgnoreCase)]
     private static partial Regex TemplatePattern();

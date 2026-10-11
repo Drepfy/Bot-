@@ -95,6 +95,7 @@ public sealed class SafeFileEnumerator
             yield break;
         }
 
+        var maxDepth = root.MaxDepth is { } rootLimit ? Math.Min(rootLimit, _settings.MaxDepth) : _settings.MaxDepth;
         var stack = new Stack<(string Path, int Depth)>();
         stack.Push((rootPath, 0));
         while (stack.Count > 0)
@@ -160,10 +161,14 @@ public sealed class SafeFileEnumerator
                         continue;
                     }
 
-                    if (depth + 1 > _settings.MaxDepth)
+                    if (depth + 1 > maxDepth)
                     {
-                        onSkipped(new SkippedItem { Path = childPath, Reason = SkipReason.DepthLimit, Detail = $"Deeper than the {_settings.MaxDepth}-level limit." });
-                        continue;
+                        if (root.MaxDepth is null)
+                        {
+                            onSkipped(new SkippedItem { Path = childPath, Reason = SkipReason.DepthLimit, Detail = $"Deeper than the {maxDepth}-level limit." });
+                        }
+
+                        continue; // Locations with their own shallow limit (for example Downloads) are not reported folder by folder.
                     }
 
                     subdirectories.Add(childPath);

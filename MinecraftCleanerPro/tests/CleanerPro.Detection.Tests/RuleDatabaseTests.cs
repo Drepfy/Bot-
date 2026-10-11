@@ -67,7 +67,9 @@ public sealed class RuleDatabaseTests
         return Encoding.UTF8.GetBytes(document.ToJsonString());
     }
 
-    private static JsonObject FirstRule(JsonObject document) => document["rules"]!.AsArray()[0]!.AsObject();
+    /// <summary>The Wurst rule: a non-heuristic rule with sources and every classification level used by these tests.</summary>
+    private static JsonObject FirstRule(JsonObject document) =>
+        document["rules"]!.AsArray().Select(r => r!.AsObject()).First(r => (string?)r["id"] == "CP-HC-0001");
 
     [Fact]
     public void InvalidRegularExpressionsAreRejected()

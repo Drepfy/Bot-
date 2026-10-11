@@ -156,9 +156,26 @@ public sealed class FindingClassifier
             RuleMatches = ruleMatches,
             Evidence = evidence,
             Limitations = limitations.Distinct().ToList(),
+            RequiresManualCleanup = observation.StartupEntry is not null,
+            ManualCleanupGuidance = observation.StartupEntry is { } entry ? ManualGuidance(entry) : null,
         };
 
         return new ClassificationOutcome(finding, false, suppressedAsLegitimate);
+    }
+
+    private static string ManualGuidance(Infrastructure.Platform.StartupEntry entry)
+    {
+        if (entry.Source.StartsWith("HKCU", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"This is a Windows startup entry. After reviewing it, disable or remove '{entry.Name}' in Task Manager → Startup apps, or let your antivirus remove it. This application never edits the registry.";
+        }
+
+        if (entry.Source.Contains("environment", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"This is the environment variable {entry.Name}. After reviewing it, remove the option in Windows Settings → System → About → Advanced system settings → Environment Variables, then restart the launcher. This application never edits environment variables.";
+        }
+
+        return $"This option is stored in the launcher settings file '{entry.Source}'. Remove it in the launcher's Java/JVM arguments settings for this profile or instance. The settings file itself is not quarantined, because that would break the launcher; any file the option loads is scanned separately.";
     }
 
     private static bool IsTrusted(ItemObservation observation, IReadOnlyList<TrustedExclusionEntry> exclusions)

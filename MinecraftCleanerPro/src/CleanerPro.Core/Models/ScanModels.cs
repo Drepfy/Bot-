@@ -21,6 +21,9 @@ public sealed record ScanRoot
 
     /// <summary>True when the root is a single file rather than a directory.</summary>
     public bool IsFile { get; init; }
+
+    /// <summary>Optional depth limit for this location (for example the top levels of Downloads); the configured limit still applies.</summary>
+    public int? MaxDepth { get; init; }
 }
 
 /// <summary>The complete, explicit scope of a scan.</summary>
@@ -37,6 +40,12 @@ public sealed record ScanScope
     public bool IncludeStartupInspection { get; init; }
 
     public bool IncludeProcessInspection { get; init; }
+
+    /// <summary>Launcher settings files read (never changed) for JVM options that load extra code, such as "-javaagent".</summary>
+    public IReadOnlyList<string> LaunchSettingsFiles { get; init; } = [];
+
+    /// <summary>Also read JAVA_TOOL_OPTIONS, _JAVA_OPTIONS and JDK_JAVA_OPTIONS (read-only).</summary>
+    public bool IncludeJavaEnvironment { get; init; }
 }
 
 /// <summary>Snapshot of scan counters. Every value reflects work that actually happened.</summary>

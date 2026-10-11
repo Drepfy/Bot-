@@ -37,6 +37,7 @@ public static partial class ModMetadataParser
                 Name = GetString(root, "name"),
                 Version = GetString(root, "version"),
                 MetadataFile = metadataFile,
+                Entrypoints = GetObjectKeys(root, "entrypoints"),
             };
         }
         catch (JsonException ex)
@@ -71,6 +72,7 @@ public static partial class ModMetadataParser
                 Name = name,
                 Version = GetString(loader, "version"),
                 MetadataFile = metadataFile,
+                Entrypoints = GetObjectKeys(loader, "entrypoints"),
             };
         }
         catch (JsonException ex)
@@ -218,6 +220,11 @@ public static partial class ModMetadataParser
 
     private static string? GetString(JsonElement element, string property) =>
         element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+
+    private static List<string> GetObjectKeys(JsonElement element, string property) =>
+        element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.Object
+            ? value.EnumerateObject().Select(p => p.Name).Where(n => n.Length is > 0 and <= 64).Take(32).ToList()
+            : [];
 
     [GeneratedRegex("^([A-Za-z]+)\\s*=\\s*[\"']([^\"']*)[\"']")]
     private static partial Regex TomlString();

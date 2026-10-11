@@ -78,6 +78,27 @@ public sealed class ScanSettings : SettingsSection
 
     public bool InspectArchives { get; set; } = true;
 
+    /// <summary>
+    /// Recognise jars by content, not only by name, so renamed or disabled jars ("x.jar.disabled", "x.dat") are
+    /// inspected too. Only the first four bytes of other files are read.
+    /// </summary>
+    public bool DetectArchivesByContent { get; set; } = true;
+
+    /// <summary>
+    /// Read launcher settings and the JAVA_TOOL_OPTIONS family of environment variables for "-javaagent" and similar
+    /// options that load code from outside the mods folder, and scan the files they point to. Read-only.
+    /// </summary>
+    public bool InspectLaunchSettings { get; set; } = true;
+
+    /// <summary>Full scans also check your Downloads and Desktop folders (top levels only) for cheat and malware files.</summary>
+    public bool IncludeDownloadLocations { get; set; } = true;
+
+    /// <summary>
+    /// Look for Minecraft game folders that no known launcher lists (portable launchers, copied instances, other drives)
+    /// by checking folder names only, with a depth and time limit.
+    /// </summary>
+    public bool SearchForUnlistedInstallations { get; set; } = true;
+
     public ArchiveLimits ArchiveLimits { get; set; } = new();
 
     /// <summary>Static (non-executing) inspection of Java class files for documented bytecode signatures.</summary>

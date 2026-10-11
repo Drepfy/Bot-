@@ -14,6 +14,10 @@
       <Button Content="_Verify integrity" Command="{Binding VerifyCommand}" ToolTip="Recalculates the SHA-256 of every quarantined copy." />
       <Button Content="_Delete permanently…" Style="{StaticResource Button.Danger}" Command="{Binding DeleteCommand}"
               ToolTip="Deletes the ticked (or highlighted) quarantined copies forever after you confirm the exact list." />
+      <Button Content="Delete _all permanently…" Style="{StaticResource Button.Danger}" Command="{Binding DeleteAllCommand}"
+              ToolTip="Deletes every quarantined copy forever after you confirm the exact list and type DELETE." />
+      <Button Content="Tick a_ll" Command="{Binding SelectAllCommand}" />
+      <Button Content="U_ntick all" Command="{Binding ClearSelectionCommand}" />
       <Button Content="Re_fresh" Command="{Binding RefreshCommand}" />
       <Button Content="_Open quarantine folder" Command="{Binding OpenFolderCommand}" />
     </WrapPanel>

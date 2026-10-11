@@ -75,10 +75,12 @@ public sealed class FindingItem : ObservableObject
 
     public IReadOnlyList<string> Limitations => Finding.Limitations;
 
-    /// <summary>Registry entries and protected system files can only be handled manually.</summary>
+    /// <summary>Registry entries, environment variables, launcher settings and protected system files can only be handled manually.</summary>
     public bool CanQuarantine =>
         Finding.CleanupStatus is CleanupStatus.NotActioned or CleanupStatus.QuarantineFailed or CleanupStatus.Restored or CleanupStatus.Blocked &&
-        System.IO.Path.IsPathFullyQualified(Finding.Path) && Finding.Classification != Classification.LikelyLegitimate;
+        !Finding.RequiresManualCleanup && System.IO.Path.IsPathFullyQualified(Finding.Path) && Finding.Classification != Classification.LikelyLegitimate;
+
+    public string? ManualCleanupGuidance => Finding.ManualCleanupGuidance;
 
     public void Refresh() => OnAllPropertiesChanged();
 }
@@ -121,6 +123,7 @@ public sealed class FindingsViewModel : PageViewModel
         View.SortDescriptions.Add(new SortDescription(nameof(FindingItem.ClassificationRank), ListSortDirection.Ascending));
 
         QuarantineSelectedCommand = new AsyncRelayCommand(QuarantineSelectedAsync, () => !_busy && !_state.IsScanning && Targets().Any());
+        DeleteSelectedCommand = new AsyncRelayCommand(DeleteSelectedAsync, () => !_busy && !_state.IsScanning && Targets().Any());
         VerifyCommand = new AsyncRelayCommand(VerifyAsync, () => !_busy && !_state.IsScanning && Session is not null);
         OpenLocationCommand = new RelayCommand(() => ShowShell(_shell.RevealFile(Selected!.Path)), () => Selected is not null && System.IO.Path.IsPathFullyQualified(Selected.Path));
         CopyHashCommand = new RelayCommand(CopyHash, () => Selected?.Finding.Sha256 is not null);
@@ -139,7 +142,7 @@ public sealed class FindingsViewModel : PageViewModel
 
     public override string Icon => "\uE7BA";
 
-    public override string Description => "Each flagged item with its classification, evidence and sources. Review the evidence before acting: quarantine is reversible, and nothing is ever deleted directly from here.";
+    public override string Description => "Each flagged item with its classification, evidence and sources. Review the evidence before acting: quarantine is reversible; permanent deletion asks you to confirm the exact items and cannot be undone.";
 
     public ObservableCollection<FindingItem> Items { get; } = [];
 
@@ -211,6 +214,8 @@ public sealed class FindingsViewModel : PageViewModel
     }
 
     public ICommand QuarantineSelectedCommand { get; }
+
+    public ICommand DeleteSelectedCommand { get; }
 
     public ICommand VerifyCommand { get; }
 
@@ -347,7 +352,7 @@ public sealed class FindingsViewModel : PageViewModel
         _busy = true;
         CommandManager.InvalidateRequerySuggested();
         var session = Session;
-        var approvedRoots = session.Scope.Roots.Select(r => r.Path).Concat(session.Scope.Roots.Select(r => r.InstallationRoot).OfType<string>()).Distinct(PathKey.Comparer).ToList();
+        var approvedRoots = ApprovedRoots(session);
         try
         {
             foreach (var target in targets)
@@ -405,6 +410,100 @@ public sealed class FindingsViewModel : PageViewModel
             await VerifyAsync();
         }
     }
+
+    private QuarantineRequest RequestFor(ScanSession session, Finding finding, List<string> approvedRoots) => new()
+    {
+        Path = finding.Path,
+        ApprovedRoots = approvedRoots,
+        ExpectedSha256 = finding.Sha256,
+        ExpectedSize = finding.IsDirectory ? null : finding.SizeBytes,
+        FindingId = finding.Id,
+        SessionId = session.Id,
+        RuleIds = finding.RuleMatches.Select(m => m.RuleId).ToList(),
+        Classification = finding.Classification.ToString(),
+        Family = finding.RuleMatches.FirstOrDefault()?.Family,
+    };
+
+    /// <summary>
+    /// Deletes the selected items permanently after a typed confirmation. Each item still goes through the verified
+    /// quarantine path first, so exactly the scanned file is removed and a crash halfway cannot lose anything else.
+    /// </summary>
+    private async Task DeleteSelectedAsync()
+    {
+        var targets = Targets().ToList();
+        if (targets.Count == 0 || Session is null)
+        {
+            return;
+        }
+
+        var weak = targets.Count(t => t.Classification is Classification.NeedsReview or Classification.Unverified);
+        var answer = _dialogs.Ask(new ConfirmationRequest
+        {
+            Title = "Delete selected items permanently?",
+            Message = "The items below are deleted permanently and cannot be restored. Use Quarantine instead if you might need them again." +
+                      (weak > 0 ? $"\n\n{weak} item(s) are only 'Needs review' or 'Unverified'. Make sure you reviewed their evidence." : string.Empty) +
+                      "\n\nClose Minecraft and launchers first so files are not in use.",
+            Items = targets.Select(t => t.Path).ToList(),
+            AcknowledgementText = "I understand this cannot be undone.",
+            TypeToConfirm = "DELETE",
+            Choices = [new DialogChoice("delete", $"Delete {targets.Count} item(s) permanently", IsDestructive: true), new DialogChoice("cancel", "Cancel", IsCancel: true)],
+        });
+        if (answer != "delete")
+        {
+            return;
+        }
+
+        _busy = true;
+        CommandManager.InvalidateRequerySuggested();
+        var session = Session;
+        var approvedRoots = ApprovedRoots(session);
+        var failures = new List<string>();
+        try
+        {
+            foreach (var target in targets)
+            {
+                var finding = target.Finding;
+                var result = await Task.Run(() => _quarantine.RemovePermanently(RequestFor(session, finding, approvedRoots), finding.IsDirectory));
+                finding.CleanupStatus = result.Succeeded ? CleanupStatus.PermanentlyDeleted
+                    : result.Quarantine.Any(r => r.BlockCode != Core.Safety.PathBlockCode.None) ? CleanupStatus.Blocked
+                    : result.Quarantine.Any(r => r.Succeeded) ? CleanupStatus.Quarantined : CleanupStatus.QuarantineFailed;
+                finding.CleanupMessage = result.Message;
+                if (!result.Succeeded)
+                {
+                    failures.Add($"{target.Path}: {result.Message}");
+                }
+
+                target.IsSelected = false;
+                target.Refresh();
+            }
+
+            _history.Save(session);
+        }
+        finally
+        {
+            _busy = false;
+            CommandManager.InvalidateRequerySuggested();
+        }
+
+        var deleted = targets.Count(t => t.Finding.CleanupStatus == CleanupStatus.PermanentlyDeleted);
+        _state.StatusMessage = $"{deleted} of {targets.Count} item(s) permanently deleted.";
+        _state.NotifyDataChanged();
+        OnPropertyChanged(nameof(CountsText));
+        var choice = _dialogs.Ask(new ConfirmationRequest
+        {
+            Title = "Deletion finished",
+            Message = $"{deleted} of {targets.Count} item(s) were permanently deleted." + (failures.Count > 0 ? " The items below were not fully deleted:" : string.Empty) +
+                      "\n\nRun a verification scan now to confirm the results?",
+            Items = failures,
+            Choices = [new DialogChoice("verify", "Verify now", IsDefault: true), new DialogChoice("later", "Later", IsCancel: true)],
+        });
+        if (choice == "verify")
+        {
+            await VerifyAsync();
+        }
+    }
+
+    private static List<string> ApprovedRoots(ScanSession session) => ScanScopeBuilder.CleanupApprovedRoots(session.Scope);
 
     private async Task VerifyAsync()
     {

@@ -44,6 +44,47 @@ public sealed class QuarantineServiceTests : IDisposable
     };
 
     [Fact]
+    public void RemovePermanentlyVerifiesThenDeletesExactlyThatFile()
+    {
+        var file = Cheat();
+        var other = Cheat("other.jar", "a different file");
+        var service = Service();
+
+        var result = service.RemovePermanently(Request(file), isDirectory: false);
+
+        Assert.True(result.Succeeded, result.Message);
+        Assert.False(File.Exists(file));
+        Assert.True(File.Exists(other));
+        Assert.Empty(service.ListEntries());
+        Assert.Equal([OperationType.Quarantine, OperationType.PermanentDelete], _log.ReadAll().Select(r => r.Type));
+        Assert.All(_log.ReadAll(), r => Assert.True(r.Succeeded));
+    }
+
+    [Fact]
+    public void RemovePermanentlyKeepsAFileThatChangedSinceTheScan()
+    {
+        var file = Cheat();
+        var request = Request(file);
+        File.WriteAllText(file, "modified after the scan");
+
+        var result = Service().RemovePermanently(request, isDirectory: false);
+
+        Assert.False(result.Succeeded);
+        Assert.Null(result.Deletion);
+        Assert.True(File.Exists(file));
+        Assert.StartsWith("Nothing was deleted", result.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RemovePermanentlyHonoursPathProtection()
+    {
+        var outside = _temp.WriteText("elsewhere/x.jar", "outside the approved folder");
+        var result = Service().RemovePermanently(Request(outside), isDirectory: false);
+        Assert.False(result.Succeeded);
+        Assert.True(File.Exists(outside));
+    }
+
+    [Fact]
     public void QuarantineMovesTheFileAndVerifiesTheCopy()
     {
         var file = Cheat();

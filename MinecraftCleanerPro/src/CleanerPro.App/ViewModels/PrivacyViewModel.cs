@@ -25,13 +25,14 @@ public sealed class PrivacyViewModel : PageViewModel
     private readonly HistoryStore _history;
     private readonly ReportService _reports;
     private readonly ScanResultCache _cache;
+    private readonly ApplicationDataEraser _eraser;
     private readonly IDialogService _dialogs;
     private readonly IShellLauncher _shell;
     private readonly AppState _state;
     private string _updateStatus = string.Empty;
 
     public PrivacyViewModel(ConfigurationService configuration, AppPaths paths, NetworkActivityLog networkLog, RuleRepository rules, RuleUpdateService updates,
-        HistoryStore history, ReportService reports, ScanResultCache cache, IDialogService dialogs, IShellLauncher shell, AppState state)
+        HistoryStore history, ReportService reports, ScanResultCache cache, ApplicationDataEraser eraser, IDialogService dialogs, IShellLauncher shell, AppState state)
     {
         _configuration = configuration;
         _paths = paths;
@@ -41,6 +42,7 @@ public sealed class PrivacyViewModel : PageViewModel
         _history = history;
         _reports = reports;
         _cache = cache;
+        _eraser = eraser;
         _dialogs = dialogs;
         _shell = shell;
         _state = state;
@@ -64,7 +66,10 @@ public sealed class PrivacyViewModel : PageViewModel
         ClearCacheCommand = new RelayCommand(ClearCache, () => !_state.IsScanning);
         ClearNetworkLogCommand = new RelayCommand(ClearNetworkLog);
         RefreshCommand = new RelayCommand(Refresh);
+        EraseAllCommand = new RelayCommand(EraseAll, () => !_state.IsScanning);
     }
+
+    public ICommand EraseAllCommand { get; }
 
     public override string Key => "privacy";
 
@@ -198,5 +203,36 @@ public sealed class PrivacyViewModel : PageViewModel
             _networkLog.Clear();
             Refresh();
         }
+    }
+
+    private void EraseAll()
+    {
+        var answer = _dialogs.Ask(new ConfirmationRequest
+        {
+            Title = "Delete all application data?",
+            Message = "Everything this application has stored on this computer is deleted. Quarantined files are deleted permanently and cannot be restored. " +
+                      "Your Minecraft folders and other programs are not touched.",
+            Items = _eraser.Describe(),
+            AcknowledgementText = "I understand this cannot be undone.",
+            TypeToConfirm = "DELETE",
+            Choices = [new DialogChoice("erase", "Delete everything", IsDestructive: true), new DialogChoice("cancel", "Cancel", IsCancel: true)],
+        });
+        if (answer != "erase")
+        {
+            return;
+        }
+
+        var result = _eraser.EraseAll();
+        _state.CurrentSession = null;
+        _state.StatusMessage = result.Succeeded ? "All application data was deleted." : "Application data was deleted, with problems (see the details).";
+        _state.NotifyDataChanged();
+        Refresh();
+        _dialogs.Ask(new ConfirmationRequest
+        {
+            Title = result.Succeeded ? "All application data deleted" : "Deletion finished with problems",
+            Message = result.Succeeded ? "Everything listed below was removed." : "Most data was removed. The items under 'Problems' could not be deleted (for example because another program had them open).",
+            Items = [.. result.Completed, .. result.Problems.Select(p => "Problem: " + p)],
+            Choices = [new DialogChoice("ok", "OK", IsDefault: true, IsCancel: true)],
+        });
     }
 }

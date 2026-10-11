@@ -22,7 +22,7 @@ public sealed class ScannerViewModel : PageViewModel
 
     private readonly ScanEngine _engine;
     private readonly ScanScopeBuilder _scopes;
-    private readonly InstallationDiscoveryService _discovery;
+    private readonly DiscoveryCoordinator _discoveryCoordinator;
     private readonly HistoryStore _history;
     private readonly ReportService _reports;
     private readonly ConfigurationService _configuration;
@@ -49,12 +49,12 @@ public sealed class ScannerViewModel : PageViewModel
     private string _resultSummary = string.Empty;
     private string? _selectedCustomFolder;
 
-    public ScannerViewModel(ScanEngine engine, ScanScopeBuilder scopes, InstallationDiscoveryService discovery, HistoryStore history, ReportService reports,
+    public ScannerViewModel(ScanEngine engine, ScanScopeBuilder scopes, DiscoveryCoordinator discoveryCoordinator, HistoryStore history, ReportService reports,
         ConfigurationService configuration, PathSafetyPolicy policy, IDialogService dialogs, AppState state, ILogger<ScannerViewModel> logger)
     {
         _engine = engine;
         _scopes = scopes;
-        _discovery = discovery;
+        _discoveryCoordinator = discoveryCoordinator;
         _history = history;
         _reports = reports;
         _configuration = configuration;
@@ -142,7 +142,9 @@ public sealed class ScannerViewModel : PageViewModel
         ? "The scope has not been calculated yet."
         : _scope.Roots.Count == 0
             ? _mode == ScanMode.Custom ? "Add at least one folder to scan." : "No enabled installation was found. Add a folder on the Installations page or use Custom Scan."
-            : $"{_scope.Roots.Count} location(s) will be read. {(_scope.IncludeStartupInspection ? "Per-user startup entries will be read (never modified). " : string.Empty)}{(_scope.IncludeProcessInspection ? "Running processes will be listed (read-only). " : string.Empty)}";
+            : $"{_scope.Roots.Count} location(s) will be read. {(_scope.IncludeStartupInspection ? "Per-user startup entries will be read (never modified). " : string.Empty)}" +
+              $"{(_scope.IncludeJavaEnvironment ? $"{_scope.LaunchSettingsFiles.Count} launcher settings file(s) and the Java environment variables will be checked for Java agents (read-only). " : string.Empty)}" +
+              $"{(_scope.IncludeProcessInspection ? "Running processes will be listed (read-only). " : string.Empty)}";
 
     public string ResourceNotice =>
         "Scanning temporarily uses CPU, memory and disk. Workers run at reduced priority" +
@@ -257,7 +259,7 @@ public sealed class ScannerViewModel : PageViewModel
 
         if (_state.Discovery.Installations.Count == 0 && _state.Discovery.LocationsChecked.Count == 0)
         {
-            _state.Discovery = _discovery.Discover(_configuration.Current.Scan.CustomDirectories);
+            _discoveryCoordinator.Refresh();
             return; // DiscoveryChanged calls back into RefreshScope.
         }
 
@@ -269,8 +271,10 @@ public sealed class ScannerViewModel : PageViewModel
             {
                 ScanRootKind.Installation => "Installation",
                 ScanRootKind.SystemArtifactLocation => "Documented location",
+                ScanRootKind.ReferencedFile => "Loaded by launch settings",
+                ScanRootKind.DownloadLocation => "Download location",
                 _ => "Your folder",
-            }, root.Reason, root.IsFile ? "File" : root.Recursive ? "All subfolders" : "This folder only"));
+            }, root.Reason, root.IsFile ? "File" : !root.Recursive ? "This folder only" : root.MaxDepth is { } depth ? $"{depth} levels deep" : "All subfolders"));
         }
 
         ExcludedPaths.Clear();

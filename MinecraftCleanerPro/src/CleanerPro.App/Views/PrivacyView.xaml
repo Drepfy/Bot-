@@ -81,6 +81,8 @@
             <Button Content="Delete saved _reports…" Command="{Binding DeleteReportsCommand}" />
             <Button Content="Clear scan _cache" Command="{Binding ClearCacheCommand}" ToolTip="Forget which unchanged files were already verified, so the next scan inspects everything again." />
             <Button Content="Re_fresh" Command="{Binding RefreshCommand}" />
+            <Button Content="Delete _all application data…" Style="{StaticResource Button.Danger}" Command="{Binding EraseAllCommand}"
+                    ToolTip="Deletes history, reports, quarantined files (permanently), logs, the audit log, the scan cache and the network log, and resets the configuration. You confirm the exact list first." />
           </WrapPanel>
         </StackPanel>
       </Border>

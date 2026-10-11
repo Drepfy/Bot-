@@ -136,6 +136,8 @@ public sealed record DeletionItemResult(string EntryId, bool Succeeded, string M
 
 public sealed record DeletionResult(bool Executed, string Message, IReadOnlyList<DeletionItemResult> Items);
 
+public sealed record PermanentRemovalResult(bool Succeeded, string Message, IReadOnlyList<QuarantineResult> Quarantine, DeletionResult? Deletion);
+
 public sealed record RecoveryReport(IReadOnlyList<string> Actions)
 {
     public bool AnythingRecovered => Actions.Count > 0;

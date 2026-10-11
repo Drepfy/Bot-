@@ -7,7 +7,6 @@ using CleanerPro.Core;
 using CleanerPro.Core.Models;
 using CleanerPro.Core.Safety;
 using CleanerPro.Infrastructure.Platform;
-using CleanerPro.Scanner.Discovery;
 
 namespace CleanerPro.App.ViewModels;
 
@@ -27,7 +26,24 @@ public sealed class InstallationItem : ObservableObject
 
     public string Name => Installation.Name;
 
-    public string Launcher => Installation.Launcher.ToString();
+    public string Launcher => Installation.Launcher switch
+    {
+        LauncherKind.OfficialLauncher => "Minecraft Launcher",
+        LauncherKind.PrismLauncher => "Prism Launcher",
+        LauncherKind.MultiMC => "MultiMC / PolyMC",
+        LauncherKind.MultiMcCompatible => "MultiMC-format launcher",
+        LauncherKind.ModrinthApp => "Modrinth App",
+        LauncherKind.CurseForge => "CurseForge",
+        LauncherKind.ATLauncher => "ATLauncher",
+        LauncherKind.GDLauncher => "GDLauncher",
+        LauncherKind.TechnicLauncher => "Technic Launcher",
+        LauncherKind.LunarClient => "Lunar Client",
+        LauncherKind.BadlionClient => "Badlion Client",
+        LauncherKind.FeatherClient => "Feather Client",
+        LauncherKind.Custom => "Added by you",
+        LauncherKind.Unlisted => "Found by folder search",
+        _ => Installation.Launcher.ToString(),
+    };
 
     public string RootPath => Installation.RootPath;
 
@@ -57,7 +73,7 @@ public sealed class InstallationItem : ObservableObject
 /// <summary>Discovered installations, the locations that were checked, and user-defined folders.</summary>
 public sealed class InstallationsViewModel : PageViewModel
 {
-    private readonly InstallationDiscoveryService _discovery;
+    private readonly DiscoveryCoordinator _discovery;
     private readonly ConfigurationService _configuration;
     private readonly PathSafetyPolicy _policy;
     private readonly IDialogService _dialogs;
@@ -66,7 +82,7 @@ public sealed class InstallationsViewModel : PageViewModel
     private InstallationItem? _selected;
     private bool _suppressSave;
 
-    public InstallationsViewModel(InstallationDiscoveryService discovery, ConfigurationService configuration, PathSafetyPolicy policy,
+    public InstallationsViewModel(DiscoveryCoordinator discovery, ConfigurationService configuration, PathSafetyPolicy policy,
         IDialogService dialogs, IShellLauncher shell, AppState state)
     {
         _discovery = discovery;
@@ -79,7 +95,24 @@ public sealed class InstallationsViewModel : PageViewModel
         AddFolderCommand = new RelayCommand(AddFolder);
         RemoveFolderCommand = new RelayCommand(RemoveFolder, () => Selected?.IsCustom == true);
         OpenFolderCommand = new RelayCommand(() => ShowResult(_shell.OpenFolder(Selected!.RootPath)), () => Selected is not null);
+        SearchCommand = new AsyncRelayCommand(() => _discovery.SearchAsync(), () => !_discovery.IsSearching);
+        CancelSearchCommand = new RelayCommand(_discovery.CancelSearch, () => _discovery.IsSearching);
+        _state.DiscoveryChanged += (_, _) => Load(_state.Discovery);
+        _discovery.PropertyChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(IsSearching));
+            OnPropertyChanged(nameof(SearchStatus));
+            CommandManager.InvalidateRequerySuggested();
+        };
     }
+
+    public bool IsSearching => _discovery.IsSearching;
+
+    public string SearchStatus => _discovery.SearchStatus;
+
+    public ICommand SearchCommand { get; }
+
+    public ICommand CancelSearchCommand { get; }
 
     public override string Key => "installations";
 
@@ -104,7 +137,8 @@ public sealed class InstallationsViewModel : PageViewModel
     public bool IsEmpty => Items.Count == 0;
 
     public string ScopeExplanation =>
-        "Only these folders (plus documented malware persistence locations, if enabled) are scanned. Drives are never scanned unless you add them yourself.";
+        "Only these folders are scanned, plus documented malware locations, files loaded by launch settings and (Full scan) the top levels of Downloads and Desktop. " +
+        "The folder search only looks at folder names to find game folders that no launcher lists; it never opens your files.";
 
     public ICommand RefreshCommand { get; }
 
@@ -122,12 +156,12 @@ public sealed class InstallationsViewModel : PageViewModel
         }
     }
 
-    public void Refresh()
+    public void Refresh() => _discovery.Refresh();
+
+    private void Load(DiscoveryResult result)
     {
         var config = _configuration.Current;
-        var result = _discovery.Discover(config.Scan.CustomDirectories);
-        _state.Discovery = result;
-
+        var selectedPath = Selected?.RootPath;
         _suppressSave = true;
         Items.Clear();
         foreach (var installation in result.Installations)
@@ -138,6 +172,7 @@ public sealed class InstallationsViewModel : PageViewModel
         }
 
         _suppressSave = false;
+        Selected = Items.FirstOrDefault(i => i.RootPath == selectedPath);
         Notes.Clear();
         foreach (var note in result.Notes)
         {

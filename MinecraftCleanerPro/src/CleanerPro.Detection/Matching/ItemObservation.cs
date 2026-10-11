@@ -49,6 +49,23 @@ public sealed class ItemObservation
     public bool InspectionIncomplete => InspectionProblems.Count > 0;
 
     public string Extension => IsDirectory ? string.Empty : System.IO.Path.GetExtension(Name).ToLowerInvariant();
+
+    /// <summary>
+    /// True when the file starts with a ZIP signature although its name does not end in .jar/.zip (for example
+    /// "client.jar.disabled" or a jar renamed to ".dat"). Such files are inspected and matched like jars.
+    /// </summary>
+    public bool ContentIsArchive { get; set; }
+
+    /// <summary>Whether a rule's extension filter accepts this item, treating archives detected by content as jars.</summary>
+    public bool HasExtension(IReadOnlyCollection<string> extensions)
+    {
+        if (extensions.Count == 0 || extensions.Contains(Extension, StringComparer.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return ContentIsArchive && (extensions.Contains(".jar", StringComparer.OrdinalIgnoreCase) || extensions.Contains(".zip", StringComparer.OrdinalIgnoreCase));
+    }
 }
 
 /// <summary>Static metadata extracted from a ZIP/JAR archive.</summary>

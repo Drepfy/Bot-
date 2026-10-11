@@ -76,4 +76,7 @@ public sealed record ModIdentity
     public string? Version { get; init; }
 
     public string? MetadataFile { get; init; }
+
+    /// <summary>Entrypoint keys declared in Fabric/Quilt metadata (for example "main", "client" or "meteor").</summary>
+    public IReadOnlyList<string> Entrypoints { get; init; } = [];
 }
