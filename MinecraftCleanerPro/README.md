@@ -60,8 +60,8 @@ investigations; every rule cites its sources. Details: [docs/DETECTION.md](docs/
 
 ## Quick start
 
-1. Download `MinecraftCleanerPro.exe` and check its SHA-256 against [docs/RELEASE-NOTES.md](docs/RELEASE-NOTES.md)
-   or the `.sha256` file that accompanies the build.
+1. Download `MinecraftCleanerPro.exe` and check its SHA-256 against the `.sha256` file that comes with the
+   same build (see [docs/RELEASE-NOTES.md](docs/RELEASE-NOTES.md)).
 2. Run it. On first launch it creates `%LocalAppData%\MinecraftCleanerPro\config.json`.
 3. Close Minecraft and all launchers.
 4. **Scanner** → choose *Quick Scan* → review the scope → **Start scan**.
@@ -126,8 +126,9 @@ MinecraftCleanerPro/
 - Authenticode checks are offline (no revocation check); jar signatures are not verified.
 - Quarantine encoding (XOR) prevents accidental execution; it is not encryption.
 - The executable is **not code-signed**.
-- The graphical interface was compiled and statically checked in a Linux container, and the
-  executable's headless self-test passed under Wine; the GUI itself is verified on Windows by the
-  CI workflow. See [docs/TEST-RESULTS.md](docs/TEST-RESULTS.md) for exactly what ran where.
+- The interface has been verified automatically only: the Windows CI smoke test opens and renders
+  every page, and the executable's headless self-test passes on Windows and under Wine. It has not
+  been tested interactively by a person, nor against real Minecraft installations or real cheat or
+  malware files. See [docs/TEST-RESULTS.md](docs/TEST-RESULTS.md) for exactly what ran where.
 - This is not a replacement for antivirus software. If malware is found, change your passwords from a
   clean device and run a full antivirus scan.
