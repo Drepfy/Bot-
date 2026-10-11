@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>CleanerPro.Privacy</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../CleanerPro.Core/CleanerPro.Core.csproj" />
+    <ProjectReference Include="../CleanerPro.Infrastructure/CleanerPro.Infrastructure.csproj" />
+    <ProjectReference Include="../CleanerPro.Configuration/CleanerPro.Configuration.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="CleanerPro.Privacy.Tests" />
+    <InternalsVisibleTo Include="CleanerPro.Integration.Tests" />
+  </ItemGroup>
+</Project>

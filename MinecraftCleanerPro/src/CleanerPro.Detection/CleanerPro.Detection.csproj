@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>CleanerPro.Detection</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../CleanerPro.Core/CleanerPro.Core.csproj" />
+    <ProjectReference Include="../CleanerPro.Infrastructure/CleanerPro.Infrastructure.csproj" />
+    <ProjectReference Include="../CleanerPro.Configuration/CleanerPro.Configuration.csproj" />
+    <ProjectReference Include="../CleanerPro.Privacy/CleanerPro.Privacy.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The bundled rule database ships inside the assembly so its integrity is that of the signed/hashed executable. -->
+    <EmbeddedResource Include="../../rules/cleanerpro-rules.json" LogicalName="CleanerPro.Rules.Bundled.json" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="CleanerPro.Detection.Tests" />
+    <InternalsVisibleTo Include="CleanerPro.Integration.Tests" />
+  </ItemGroup>
+</Project>

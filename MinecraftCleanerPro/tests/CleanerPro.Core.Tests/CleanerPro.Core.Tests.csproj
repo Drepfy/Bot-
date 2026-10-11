@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <RootNamespace>CleanerPro.Core.Tests</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../Shared/**/*.cs" Link="Shared/%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/CleanerPro.Core/CleanerPro.Core.csproj" />
+    <ProjectReference Include="../../src/CleanerPro.Infrastructure/CleanerPro.Infrastructure.csproj" />
+    <ProjectReference Include="../../src/CleanerPro.Configuration/CleanerPro.Configuration.csproj" />
+    <ProjectReference Include="../../src/CleanerPro.Privacy/CleanerPro.Privacy.csproj" />
+  </ItemGroup>
+</Project>

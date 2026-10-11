@@ -1,0 +1,12 @@
+bin/
+obj/
+artifacts/
+TestResults/
+*.user
+*.suo
+.vs/
+.vscode/
+*.swp
+# Never commit signing keys for the rule database.
+*.private.pem
+*.private.key

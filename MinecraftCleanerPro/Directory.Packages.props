@@ -1,0 +1,17 @@
+<Project>
+  <!--
+    Central, pinned package versions. Every third-party dependency is listed here and documented in
+    docs/DEPENDENCIES.md, including whether it can touch the filesystem or the network.
+  -->
+  <ItemGroup>
+    <!-- Runtime dependencies (Microsoft, no network access of their own). -->
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
+
+    <!-- Test-only dependencies. -->
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
+  </ItemGroup>
+</Project>

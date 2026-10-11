@@ -1,0 +1,2766 @@
+{
+  "formatVersion": 1,
+  "databaseVersion": 2026101101,
+  "displayVersion": "2026.10.11.1",
+  "publishedAt": "2026-10-11T00:00:00Z",
+  "expiresAt": null,
+  "description": "Bundled detection rules for Minecraft Cleaner Pro Ultimate. Every non-heuristic rule cites the public source its indicators were verified against on the date shown. No hashes or indicators were invented.",
+  "rules": [
+    {
+      "id": "CP-HC-0001",
+      "version": 1,
+      "family": "Wurst Client",
+      "category": "HackedClient",
+      "severity": "Medium",
+      "appliesTo": [
+        "Archive"
+      ],
+      "fileExtensions": [
+        ".jar",
+        ".zip"
+      ],
+      "indicators": [
+        {
+          "id": "mod-id",
+          "type": "ModId",
+          "value": "wurst",
+          "strength": "Strong",
+          "description": "Mod metadata uses the Wurst Client mod id"
+        },
+        {
+          "id": "package",
+          "type": "ClassPackagePrefix",
+          "value": "net/wurstclient/",
+          "strength": "Strong",
+          "description": "Classes in the Wurst Client package"
+        },
+        {
+          "id": "mixins",
+          "type": "ArchiveEntry",
+          "value": "wurst.mixins.json",
+          "strength": "Moderate",
+          "description": "Wurst Client mixin configuration"
+        }
+      ],
+      "classification": {
+        "knownMatch": [
+          {
+            "all": [
+              "mod-id",
+              "package"
+            ]
+          },
+          {
+            "all": [
+              "package",
+              "mixins"
+            ]
+          }
+        ],
+        "highConfidenceSuspicion": [
+          {
+            "all": [
+              "package"
+            ]
+          },
+          {
+            "all": [
+              "mod-id",
+              "mixins"
+            ]
+          }
+        ],
+        "needsReview": [
+          {
+            "any": [
+              "mod-id",
+              "mixins"
+            ]
+          }
+        ]
+      },
+      "recommendedAction": "Quarantine",
+      "reputationOnMatch": "KnownCheat",
+      "confidenceRationale": "The mod id, class package and mixin configuration were taken from the official Wurst Client source repository. Two independent indicators are required for a known match; a single indicator is reported for review.",
+      "falsePositiveNotes": "Third-party addons for this client reuse its package names. Renamed or repackaged builds may not match. A matching file proves the client is installed, not that it was used on a server.",
+      "limitations": "Only installed files are detected. Builds that were obfuscated or relocated to other packages are not covered by this rule.",
+      "sources": [
+        {
+          "title": "Wurst7 fabric.mod.json (mod id, entrypoint package)",
+          "url": "https://github.com/Wurst-Imperium/Wurst7/blob/master/src/main/resources/fabric.mod.json",
+          "retrieved": "2026-10-11"
+        },
+        {
+          "title": "Wurst7 wurst.mixins.json (mixin package net.wurstclient.mixin)",
+          "url": "https://github.com/Wurst-Imperium/Wurst7/blob/master/src/main/resources/wurst.mixins.json",
+          "retrieved": "2026-10-11"
+        },
+        {
+          "title": "Wurst7 hack modules, e.g. KillauraHack",
+          "url": "https://github.com/Wurst-Imperium/Wurst7/blob/master/src/main/java/net/wurstclient/hacks/KillauraHack.java",
+          "retrieved": "2026-10-11"
+        }
+      ],
+      "verifiedOn": "2026-10-11"
+    },
+    {
+      "id": "CP-HC-0002",
+      "version": 1,
+      "family": "Meteor Client",
+      "category": "HackedClient",
+      "severity": "Medium",
+      "appliesTo": [
+        "Archive"
+      ],
+      "fileExtensions": [
+        ".jar",
+        ".zip"
+      ],
+      "indicators": [
+        {
+          "id": "mod-id",
+          "type": "ModId",
+          "value": "meteor-client",
+          "strength": "Strong",
+          "description": "Mod metadata uses the Meteor Client mod id"
+        },
+        {
+          "id": "package",
+          "type": "ClassPackagePrefix",
+          "value": "meteordevelopment/meteorclient/",
+          "strength": "Strong",
+          "description": "Classes in the Meteor Client package"
+        },
+        {
+          "id": "mixins",
+          "type": "ArchiveEntry",
+          "value": "meteor-client.mixins.json",
+          "strength": "Moderate",
+          "description": "Meteor Client mixin configuration"
+        }
+      ],
+      "classification": {
+        "knownMatch": [
+          {
+            "all": [
+              "mod-id",
+              "package"
+            ]
+          },
+          {
+            "all": [
+              "package",
+              "mixins"
+            ]
+          }
+        ],
+        "highConfidenceSuspicion": [
+          {
+            "all": [
+              "package"
+            ]
+          },
+          {
+            "all": [
+              "mod-id",
+              "mixins"
+            ]
+          }
+        ],
+        "needsReview": [
+          {
+            "any": [
+              "mod-id",
+              "mixins"
+            ]
+          }
+        ]
+      },
+      "recommendedAction": "Quarantine",
+      "reputationOnMatch": "KnownCheat",
+      "confidenceRationale": "The mod id, class package and mixin configuration were taken from the official Meteor Client source repository. Two independent indicators are required for a known match; a single indicator is reported for review.",
+      "falsePositiveNotes": "Third-party addons for this client reuse its package names. Renamed or repackaged builds may not match. A matching file proves the client is installed, not that it was used on a server.",
+      "limitations": "Only installed files are detected. Builds that were obfuscated or relocated to other packages are not covered by this rule.",
+      "sources": [
+        {
+          "title": "Meteor Client fabric.mod.json (mod id, entrypoint package)",
+          "url": "https://github.com/MeteorDevelopment/meteor-client/blob/master/src/main/resources/fabric.mod.json",
+          "retrieved": "2026-10-11"
+        },
+        {
+          "title": "Meteor Client meteor-client.mixins.json",
+          "url": "https://github.com/MeteorDevelopment/meteor-client/blob/master/src/main/resources/meteor-client.mixins.json",
+          "retrieved": "2026-10-11"
+        },
+        {
+          "title": "Meteor Client combat module KillAura",
+          "url": "https://github.com/MeteorDevelopment/meteor-client/blob/master/src/main/java/meteordevelopment/meteorclient/systems/modules/combat/KillAura.java",
+          "retrieved": "2026-10-11"
+        }
+      ],
+      "verifiedOn": "2026-10-11"
+    },
+    {
+      "id": "CP-HC-0003",
+      "version": 1,
+      "family": "LiquidBounce",
+      "category": "HackedClient",
+      "severity": "Medium",
+      "appliesTo": [
+        "Archive"
+      ],
+      "fileExtensions": [
+        ".jar",
+        ".zip"
+      ],
+      "indicators": [
+        {
+          "id": "mod-id",
+          "type": "ModId",
+          "value": "liquidbounce",
+          "strength": "Strong",
+          "description": "Mod metadata uses the LiquidBounce mod id"
+        },
+        {
+          "id": "package",
+          "type": "ClassPackagePrefix",
+          "value": "net/ccbluex/liquidbounce/",
+          "strength": "Strong",
+          "description": "Classes in the LiquidBounce package"
+        },
+        {
+          "id": "mixins",
+          "type": "ArchiveEntry",
+          "value": "liquidbounce.mixins.json",
+          "strength": "Moderate",
+          "description": "LiquidBounce mixin configuration"
+        }
+      ],
+      "classification": {
+        "knownMatch": [
+          {
+            "all": [
+              "mod-id",
+              "package"
+            ]
+          },
+          {
+            "all": [
+              "package",
+              "mixins"
+            ]
+          }
+        ],
+        "highConfidenceSuspicion": [
+          {
+            "all": [
+              "package"
+            ]
+          },
+          {
+            "all": [
+              "mod-id",
+              "mixins"
+            ]
+          }
+        ],
+        "needsReview": [
+          {
+            "any": [
+              "mod-id",
+              "mixins"
+            ]
+          }
+        ]
+      },
+      "recommendedAction": "Quarantine",
+      "reputationOnMatch": "KnownCheat",
+      "confidenceRationale": "The mod id, class package and mixin configuration were taken from the official LiquidBounce source repository. Two independent indicators are required for a known match; a single indicator is reported for review.",
+      "falsePositiveNotes": "Third-party addons for this client reuse its package names. Renamed or repackaged builds may not match. A matching file proves the client is installed, not that it was used on a server.",
+      "limitations": "Only installed files are detected. Builds that were obfuscated or relocated to other packages are not covered by this rule.",
+      "sources": [
+        {
+          "title": "LiquidBounce fabric.mod.json (describes itself as a hacked client)",
+          "url": "https://github.com/CCBlueX/LiquidBounce/blob/nextgen/src/main/resources/fabric.mod.json",
+          "retrieved": "2026-10-11"
+        },
+        {
+          "title": "LiquidBounce liquidbounce.mixins.json",
+          "url": "https://github.com/CCBlueX/LiquidBounce/blob/nextgen/src/main/resources/liquidbounce.mixins.json",
+          "retrieved": "2026-10-11"
+        },
+        {
+          "title": "LiquidBounce ModuleKillAura",
+          "url": "https://github.com/CCBlueX/LiquidBounce/blob/nextgen/src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/killaura/ModuleKillAura.kt",
+          "retrieved": "2026-10-11"
+        }
+      ],
+      "verifiedOn": "2026-10-11"
+    },
+    {
+      "id": "CP-HC-0004",
+      "version": 1,
+      "family": "BleachHack",
+      "category": "HackedClient",
+      "severity": "Medium",
+      "appliesTo": [
+        "Archive"
+      ],
+      "fileExtensions": [
+        ".jar",
+        ".zip"
+      ],
+      "indicators": [
+        {
+          "id": "mod-id",
+          "type": "ModId",
+          "value": "bleachhack",
+          "strength": "Strong",
+          "description": "Mod metadata uses the BleachHack mod id"
+        },
+        {
+          "id": "package",
+          "type": "ClassPackagePrefix",
+          "value": "org/bleachhack/",
+          "strength": "Strong",
+          "description": "Classes in the BleachHack package"
+        },
+        {
+          "id": "mixins",
+          "type": "ArchiveEntry",
+          "value": "bleachhack.mixins.json",
+          "strength": "Moderate",
+          "description": "BleachHack mixin configuration"
+        }
+      ],
+      "classification": {
+        "knownMatch": [
+          {
+            "all": [
+              "mod-id",
+              "package"
+            ]
+          },
+          {
+            "all": [
+              "package",
+              "mixins"
+            ]
+          }
+        ],
+        "highConfidenceSuspicion": [
+          {
+            "all": [
+              "package"
+            ]
+          },
+          {
+            "all": [
+              "mod-id",
+              "mixins"
+            ]
+          }
+        ],
+        "needsReview": [
+          {
+            "any": [
+              "mod-id",
+              "mixins"
+            ]
+          }
+        ]
+      },
+      "recommendedAction": "Quarantine",
+      "reputationOnMatch": "KnownCheat",
+      "confidenceRationale": "The mod id, class package and mixin configuration were taken from the official BleachHack source repository. Two independent indicators are required for a known match; a single indicator is reported for review.",
+      "falsePositiveNotes": "Third-party addons for this client reuse its package names. Renamed or repackaged builds may not match. A matching file proves the client is installed, not that it was used on a server.",
+      "limitations": "Only installed files are detected. Builds that were obfuscated or relocated to other packages are not covered by this rule.",
+      "sources": [
+        {
+          "title": "BleachHack fabric.mod.json",
+          "url": "https://github.com/BleachDev/BleachHack/blob/1.19.4/src/main/resources/fabric.mod.json",
+          "retrieved": "2026-10-11"
+        },
+        {
+          "title": "BleachHack bleachhack.mixins.json",
+          "url": "https://github.com/BleachDev/BleachHack/blob/1.19.4/src/main/resources/bleachhack.mixins.json",
+          "retrieved": "2026-10-11"
+        },
+        {
+          "title": "BleachHack Killaura module",
+          "url": "https://github.com/BleachDev/BleachHack/blob/1.19.4/src/main/java/org/bleachhack/module/mods/Killaura.java",
+          "retrieved": "2026-10-11"
+        }
+      ],
+      "verifiedOn": "2026-10-11"
+    },
+    {
+      "id": "CP-HC-0005",
+      "version": 1,
+      "family": "ThunderHack",
+      "category": "HackedClient",
+      "severity": "Medium",
+      "appliesTo": [
+        "Archive"
+      ],
+      "fileExtensions": [
+        ".jar",
+        ".zip"
+      ],
+      "indicators": [
+        {
+          "id": "mod-id",
+          "type": "ModId",
+          "value": "thunderhack",
+          "strength": "Strong",
+          "description": "Mod metadata uses the ThunderHack mod id"
+        },
+        {
+          "id": "package",
+          "type": "ClassPackagePrefix",
+          "value": "thunder/hack/",
+          "strength": "Strong",
+          "description": "Classes in the ThunderHack package"
+        },
+        {
+          "id": "mixins",
+          "type": "ArchiveEntry",
+          "value": "thunderhack.mixins.json",
+          "strength": "Moderate",
+          "description": "ThunderHack mixin configuration"
+        }
+      ],
+      "classification": {
+        "knownMatch": [
+          {
+            "all": [
+              "mod-id",
+              "package"
+            ]
+          },
+          {
+            "all": [
+              "package",
+              "mixins"
+            ]
+          }
+        ],
+        "highConfidenceSuspicion": [
+          {
+            "all": [
+              "package"
+            ]
+          },
+          {
+            "all": [
+              "mod-id",
+              "mixins"
+            ]
+          }
+        ],
+        "needsReview": [
+          {
+            "any": [
+              "mod-id",
+              "mixins"
+            ]
+          }
+        ]
+      },
+      "recommendedAction": "Quarantine",
+      "reputationOnMatch": "KnownCheat",
+      "confidenceRationale": "The mod id, class package and mixin configuration were taken from the official ThunderHack source repository. Two independent indicators are required for a known match; a single indicator is reported for review.",
+      "falsePositiveNotes": "Third-party addons for this client reuse its package names. Renamed or repackaged builds may not match. A matching file proves the client is installed, not that it was used on a server.",
+      "limitations": "Only installed files are detected. Builds that were obfuscated or relocated to other packages are not covered by this rule.",
+      "sources": [
+        {
+          "title": "ThunderHack Recode fabric.mod.json",
+          "url": "https://github.com/Pan4ur/ThunderHack-Recode/blob/main/src/main/resources/fabric.mod.json",
+          "retrieved": "2026-10-11"
+        },
+        {
+          "title": "ThunderHack thunderhack.mixins.json",
+          "url": "https://github.com/Pan4ur/ThunderHack-Recode/blob/main/src/main/resources/thunderhack.mixins.json",
+          "retrieved": "2026-10-11"
+        },
+        {
+          "title": "ThunderHack combat module Aura",
+          "url": "https://github.com/Pan4ur/ThunderHack-Recode/blob/main/src/main/java/thunder/hack/features/modules/combat/Aura.java",
+          "retrieved": "2026-10-11"
+        }
+      ],
+      "verifiedOn": "2026-10-11"
+    },
+    {
+      "id": "CP-HEUR-0001",
+      "version": 1,
+      "family": "Generic combat cheat modules",
+      "category": "CombatAutomation",
+      "severity": "Medium",
+      "appliesTo": [
+        "Archive"
+      ],
+      "fileExtensions": [
+        ".jar",
+        ".zip",
+        ".litemod"
+      ],
+      "heuristic": true,
+      "indicators": [
+        {
+          "id": "killaura",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?((kill_?)?aura)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'killaura' cheat module inside a module/hack package"
+        },
+        {
+          "id": "aim",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(aim_?(assist|bot))(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'aim' cheat module inside a module/hack package"
+        },
+        {
+          "id": "triggerbot",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(trigger_?bot)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'triggerbot' cheat module inside a module/hack package"
+        },
+        {
+          "id": "autoclicker",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(auto_?clicker)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'autoclicker' cheat module inside a module/hack package"
+        },
+        {
+          "id": "reach",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(reach)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'reach' cheat module inside a module/hack package"
+        },
+        {
+          "id": "velocity",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(velocity|anti_?knockback|anti_?kb)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'velocity' cheat module inside a module/hack package"
+        },
+        {
+          "id": "criticals",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(criticals?)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'criticals' cheat module inside a module/hack package"
+        },
+        {
+          "id": "crystalaura",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(crystal_?aura|auto_?crystal)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'crystalaura' cheat module inside a module/hack package"
+        },
+        {
+          "id": "hitbox",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(hit_?box(es)?)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'hitbox' cheat module inside a module/hack package"
+        }
+      ],
+      "classification": {
+        "highConfidenceSuspicion": [
+          {
+            "counts": [
+              {
+                "atLeast": 4,
+                "of": [
+                  "killaura",
+                  "aim",
+                  "triggerbot",
+                  "autoclicker",
+                  "reach",
+                  "velocity",
+                  "criticals",
+                  "crystalaura",
+                  "hitbox"
+                ]
+              }
+            ]
+          }
+        ],
+        "needsReview": [
+          {
+            "counts": [
+              {
+                "atLeast": 2,
+                "of": [
+                  "killaura",
+                  "aim",
+                  "triggerbot",
+                  "autoclicker",
+                  "reach",
+                  "velocity",
+                  "criticals",
+                  "crystalaura",
+                  "hitbox"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "recommendedAction": "Quarantine",
+      "reputationOnMatch": "Suspicious",
+      "confidenceRationale": "Generic heuristic: hacked clients organise cheats as one class per module inside 'module(s)'/'hack(s)' packages. The verified examples are Meteor Client (systems/modules/combat/KillAura), Wurst (hacks/KillauraHack), BleachHack (module/mods/Killaura), ThunderHack (features/modules/combat/Aura) and LiquidBounce (features/module/modules/combat/killaura/ModuleKillAura). Class names alone are weak evidence. Two distinct combat-module names are needed for review and four for a high-confidence suspicion (KillAura, aim assistance, trigger bots, auto-clickers, reach, velocity/anti-knockback, criticals, crystal aura, hitboxes).",
+      "falsePositiveNotes": "Legitimate mods occasionally use these words for class names inside 'features' or 'modules' packages. Several distinct module names must appear together before anything is reported, and legitimacy evidence overrides this heuristic.",
+      "limitations": "Obfuscated clients rename classes and are not found by this heuristic.",
+      "sources": [
+        {
+          "title": "Wurst7 hack modules, e.g. KillauraHack",
+          "url": "https://github.com/Wurst-Imperium/Wurst7/blob/master/src/main/java/net/wurstclient/hacks/KillauraHack.java",
+          "retrieved": "2026-10-11"
+        },
+        {
+          "title": "Meteor Client combat module KillAura",
+          "url": "https://github.com/MeteorDevelopment/meteor-client/blob/master/src/main/java/meteordevelopment/meteorclient/systems/modules/combat/KillAura.java",
+          "retrieved": "2026-10-11"
+        },
+        {
+          "title": "LiquidBounce ModuleKillAura",
+          "url": "https://github.com/CCBlueX/LiquidBounce/blob/nextgen/src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/killaura/ModuleKillAura.kt",
+          "retrieved": "2026-10-11"
+        },
+        {
+          "title": "BleachHack Killaura module",
+          "url": "https://github.com/BleachDev/BleachHack/blob/1.19.4/src/main/java/org/bleachhack/module/mods/Killaura.java",
+          "retrieved": "2026-10-11"
+        },
+        {
+          "title": "ThunderHack combat module Aura",
+          "url": "https://github.com/Pan4ur/ThunderHack-Recode/blob/main/src/main/java/thunder/hack/features/modules/combat/Aura.java",
+          "retrieved": "2026-10-11"
+        }
+      ],
+      "verifiedOn": "2026-10-11"
+    },
+    {
+      "id": "CP-HEUR-0002",
+      "version": 1,
+      "family": "Generic movement and timer cheat modules",
+      "category": "MovementOrTimer",
+      "severity": "Medium",
+      "appliesTo": [
+        "Archive"
+      ],
+      "fileExtensions": [
+        ".jar",
+        ".zip",
+        ".litemod"
+      ],
+      "heuristic": true,
+      "indicators": [
+        {
+          "id": "fly",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(fly|flight)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'fly' cheat module inside a module/hack package"
+        },
+        {
+          "id": "speed",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(speed)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'speed' cheat module inside a module/hack package"
+        },
+        {
+          "id": "timer",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(timer)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'timer' cheat module inside a module/hack package"
+        },
+        {
+          "id": "scaffold",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(scaffold(walk)?)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'scaffold' cheat module inside a module/hack package"
+        },
+        {
+          "id": "nofall",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(no_?fall)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'nofall' cheat module inside a module/hack package"
+        },
+        {
+          "id": "noslow",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(no_?slow(down)?)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'noslow' cheat module inside a module/hack package"
+        },
+        {
+          "id": "step",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(step)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'step' cheat module inside a module/hack package"
+        },
+        {
+          "id": "spider",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(spider)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'spider' cheat module inside a module/hack package"
+        },
+        {
+          "id": "jesus",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(jesus)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'jesus' cheat module inside a module/hack package"
+        },
+        {
+          "id": "blink",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(blink)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'blink' cheat module inside a module/hack package"
+        },
+        {
+          "id": "longjump",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(long_?jump)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'longjump' cheat module inside a module/hack package"
+        }
+      ],
+      "classification": {
+        "highConfidenceSuspicion": [
+          {
+            "counts": [
+              {
+                "atLeast": 5,
+                "of": [
+                  "fly",
+                  "speed",
+                  "timer",
+                  "scaffold",
+                  "nofall",
+                  "noslow",
+                  "step",
+                  "spider",
+                  "jesus",
+                  "blink",
+                  "longjump"
+                ]
+              }
+            ]
+          }
+        ],
+        "needsReview": [
+          {
+            "counts": [
+              {
+                "atLeast": 3,
+                "of": [
+                  "fly",
+                  "speed",
+                  "timer",
+                  "scaffold",
+                  "nofall",
+                  "noslow",
+                  "step",
+                  "spider",
+                  "jesus",
+                  "blink",
+                  "longjump"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "recommendedAction": "Quarantine",
+      "reputationOnMatch": "Suspicious",
+      "confidenceRationale": "Generic heuristic: hacked clients organise cheats as one class per module inside 'module(s)'/'hack(s)' packages. The verified examples are Meteor Client (systems/modules/combat/KillAura), Wurst (hacks/KillauraHack), BleachHack (module/mods/Killaura), ThunderHack (features/modules/combat/Aura) and LiquidBounce (features/module/modules/combat/killaura/ModuleKillAura). Class names alone are weak evidence. Three distinct movement-module names (fly, speed, timer, scaffold, no-fall, no-slow, step, spider, jesus, blink, long jump) are needed for review and five for a high-confidence suspicion.",
+      "falsePositiveNotes": "Legitimate mods occasionally use these words for class names inside 'features' or 'modules' packages. Several distinct module names must appear together before anything is reported, and legitimacy evidence overrides this heuristic.",
+      "limitations": "Obfuscated clients rename classes and are not found by this heuristic.",
+      "sources": [
+        {
+          "title": "Wurst7 hack modules, e.g. KillauraHack",
+          "url": "https://github.com/Wurst-Imperium/Wurst7/blob/master/src/main/java/net/wurstclient/hacks/KillauraHack.java",
+          "retrieved": "2026-10-11"
+        },
+        {
+          "title": "Meteor Client combat module KillAura",
+          "url": "https://github.com/MeteorDevelopment/meteor-client/blob/master/src/main/java/meteordevelopment/meteorclient/systems/modules/combat/KillAura.java",
+          "retrieved": "2026-10-11"
+        },
+        {
+          "title": "LiquidBounce ModuleKillAura",
+          "url": "https://github.com/CCBlueX/LiquidBounce/blob/nextgen/src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/killaura/ModuleKillAura.kt",
+          "retrieved": "2026-10-11"
+        },
+        {
+          "title": "BleachHack Killaura module",
+          "url": "https://github.com/BleachDev/BleachHack/blob/1.19.4/src/main/java/org/bleachhack/module/mods/Killaura.java",
+          "retrieved": "2026-10-11"
+        },
+        {
+          "title": "ThunderHack combat module Aura",
+          "url": "https://github.com/Pan4ur/ThunderHack-Recode/blob/main/src/main/java/thunder/hack/features/modules/combat/Aura.java",
+          "retrieved": "2026-10-11"
+        }
+      ],
+      "verifiedOn": "2026-10-11"
+    },
+    {
+      "id": "CP-HEUR-0003",
+      "version": 1,
+      "family": "Generic X-ray and ESP cheat modules",
+      "category": "XRayOrEsp",
+      "severity": "Medium",
+      "appliesTo": [
+        "Archive"
+      ],
+      "fileExtensions": [
+        ".jar",
+        ".zip",
+        ".litemod"
+      ],
+      "heuristic": true,
+      "indicators": [
+        {
+          "id": "xray",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(x_?ray)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'xray' cheat module inside a module/hack package"
+        },
+        {
+          "id": "esp",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?((player_?|chest_?|storage_?)?esp)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'esp' cheat module inside a module/hack package"
+        },
+        {
+          "id": "tracers",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(tracers?)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'tracers' cheat module inside a module/hack package"
+        },
+        {
+          "id": "wallhack",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(wall_?hack)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'wallhack' cheat module inside a module/hack package"
+        },
+        {
+          "id": "chams",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(chams)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'chams' cheat module inside a module/hack package"
+        }
+      ],
+      "classification": {
+        "highConfidenceSuspicion": [
+          {
+            "counts": [
+              {
+                "atLeast": 3,
+                "of": [
+                  "xray",
+                  "esp",
+                  "tracers",
+                  "wallhack",
+                  "chams"
+                ]
+              }
+            ]
+          }
+        ],
+        "needsReview": [
+          {
+            "counts": [
+              {
+                "atLeast": 2,
+                "of": [
+                  "xray",
+                  "esp",
+                  "tracers",
+                  "wallhack",
+                  "chams"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "recommendedAction": "Quarantine",
+      "reputationOnMatch": "Suspicious",
+      "confidenceRationale": "Generic heuristic: hacked clients organise cheats as one class per module inside 'module(s)'/'hack(s)' packages. The verified examples are Meteor Client (systems/modules/combat/KillAura), Wurst (hacks/KillauraHack), BleachHack (module/mods/Killaura), ThunderHack (features/modules/combat/Aura) and LiquidBounce (features/module/modules/combat/killaura/ModuleKillAura). Class names alone are weak evidence. Two distinct render-cheat module names (x-ray, ESP, tracers, wallhack, chams) are needed for review and three for a high-confidence suspicion.",
+      "falsePositiveNotes": "Legitimate mods occasionally use these words for class names inside 'features' or 'modules' packages. Several distinct module names must appear together before anything is reported, and legitimacy evidence overrides this heuristic.",
+      "limitations": "Obfuscated clients rename classes and are not found by this heuristic.",
+      "sources": [
+        {
+          "title": "Wurst7 hack modules, e.g. KillauraHack",
+          "url": "https://github.com/Wurst-Imperium/Wurst7/blob/master/src/main/java/net/wurstclient/hacks/KillauraHack.java",
+          "retrieved": "2026-10-11"
+        },
+        {
+          "title": "Meteor Client combat module KillAura",
+          "url": "https://github.com/MeteorDevelopment/meteor-client/blob/master/src/main/java/meteordevelopment/meteorclient/systems/modules/combat/KillAura.java",
+          "retrieved": "2026-10-11"
+        },
+        {
+          "title": "LiquidBounce ModuleKillAura",
+          "url": "https://github.com/CCBlueX/LiquidBounce/blob/nextgen/src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/killaura/ModuleKillAura.kt",
+          "retrieved": "2026-10-11"
+        },
+        {
+          "title": "BleachHack Killaura module",
+          "url": "https://github.com/BleachDev/BleachHack/blob/1.19.4/src/main/java/org/bleachhack/module/mods/Killaura.java",
+          "retrieved": "2026-10-11"
+        },
+        {
+          "title": "ThunderHack combat module Aura",
+          "url": "https://github.com/Pan4ur/ThunderHack-Recode/blob/main/src/main/java/thunder/hack/features/modules/combat/Aura.java",
+          "retrieved": "2026-10-11"
+        }
+      ],
+      "verifiedOn": "2026-10-11"
+    },
+    {
+      "id": "CP-HEUR-0004",
+      "version": 1,
+      "family": "Generic hacked-client module layout",
+      "category": "HackedClient",
+      "severity": "Medium",
+      "appliesTo": [
+        "Archive"
+      ],
+      "fileExtensions": [
+        ".jar",
+        ".zip",
+        ".litemod"
+      ],
+      "heuristic": true,
+      "indicators": [
+        {
+          "id": "c-killaura",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?((kill_?)?aura)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'killaura' cheat module inside a module/hack package"
+        },
+        {
+          "id": "c-aim",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(aim_?(assist|bot))(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'aim' cheat module inside a module/hack package"
+        },
+        {
+          "id": "c-triggerbot",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(trigger_?bot)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'triggerbot' cheat module inside a module/hack package"
+        },
+        {
+          "id": "c-autoclicker",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(auto_?clicker)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'autoclicker' cheat module inside a module/hack package"
+        },
+        {
+          "id": "c-reach",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(reach)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'reach' cheat module inside a module/hack package"
+        },
+        {
+          "id": "c-velocity",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(velocity|anti_?knockback|anti_?kb)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'velocity' cheat module inside a module/hack package"
+        },
+        {
+          "id": "c-criticals",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(criticals?)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'criticals' cheat module inside a module/hack package"
+        },
+        {
+          "id": "c-crystalaura",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(crystal_?aura|auto_?crystal)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'crystalaura' cheat module inside a module/hack package"
+        },
+        {
+          "id": "c-hitbox",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(hit_?box(es)?)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'hitbox' cheat module inside a module/hack package"
+        },
+        {
+          "id": "m-fly",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(fly|flight)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'fly' cheat module inside a module/hack package"
+        },
+        {
+          "id": "m-speed",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(speed)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'speed' cheat module inside a module/hack package"
+        },
+        {
+          "id": "m-timer",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(timer)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'timer' cheat module inside a module/hack package"
+        },
+        {
+          "id": "m-scaffold",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(scaffold(walk)?)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'scaffold' cheat module inside a module/hack package"
+        },
+        {
+          "id": "m-nofall",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(no_?fall)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'nofall' cheat module inside a module/hack package"
+        },
+        {
+          "id": "m-noslow",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(no_?slow(down)?)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'noslow' cheat module inside a module/hack package"
+        },
+        {
+          "id": "m-step",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(step)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'step' cheat module inside a module/hack package"
+        },
+        {
+          "id": "m-spider",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(spider)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'spider' cheat module inside a module/hack package"
+        },
+        {
+          "id": "m-jesus",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(jesus)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'jesus' cheat module inside a module/hack package"
+        },
+        {
+          "id": "m-blink",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(blink)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'blink' cheat module inside a module/hack package"
+        },
+        {
+          "id": "m-longjump",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(long_?jump)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'longjump' cheat module inside a module/hack package"
+        },
+        {
+          "id": "r-xray",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(x_?ray)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'xray' cheat module inside a module/hack package"
+        },
+        {
+          "id": "r-esp",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?((player_?|chest_?|storage_?)?esp)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'esp' cheat module inside a module/hack package"
+        },
+        {
+          "id": "r-tracers",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(tracers?)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'tracers' cheat module inside a module/hack package"
+        },
+        {
+          "id": "r-wallhack",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(wall_?hack)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'wallhack' cheat module inside a module/hack package"
+        },
+        {
+          "id": "r-chams",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(chams)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'chams' cheat module inside a module/hack package"
+        },
+        {
+          "id": "i-autototem",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(auto_?totem)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'autototem' cheat module inside a module/hack package"
+        },
+        {
+          "id": "i-cheststealer",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(chest_?stealer|stealer)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'cheststealer' cheat module inside a module/hack package"
+        },
+        {
+          "id": "i-autoarmor",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?(auto_?armou?r)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'autoarmor' cheat module inside a module/hack package"
+        },
+        {
+          "id": "i-invmanager",
+          "type": "ArchiveEntryPattern",
+          "value": "(?i)(^|/)(module|modules|hack|hacks|cheat|cheats|features)/([^/]+/){0,4}(module)?((inventory|inv)_?manager)(hack|module)?(\\$[^/]*)?\\.class$",
+          "strength": "Weak",
+          "description": "Class named like a 'invmanager' cheat module inside a module/hack package"
+        }
+      ],
+      "classification": {
+        "highConfidenceSuspicion": [
+          {
+            "counts": [
+              {
+                "atLeast": 2,
+                "of": [
+                  "c-killaura",
+                  "c-aim",
+                  "c-triggerbot",
+                  "c-autoclicker",
+                  "c-reach",
+                  "c-velocity",
+                  "c-criticals",
+                  "c-crystalaura",
+                  "c-hitbox"
+                ]
+              },
+              {
+                "atLeast": 2,
+                "of": [
+                  "m-fly",
+                  "m-speed",
+                  "m-timer",
+                  "m-scaffold",
+                  "m-nofall",
+                  "m-noslow",
+                  "m-step",
+                  "m-spider",
+                  "m-jesus",
+                  "m-blink",
+                  "m-longjump"
+                ]
+              },
+              {
+                "atLeast": 1,
+                "of": [
+                  "r-xray",
+                  "r-esp",
+                  "r-tracers",
+                  "r-wallhack",
+                  "r-chams",
+                  "i-autototem",
+                  "i-cheststealer",
+                  "i-autoarmor",
+                  "i-invmanager"
+                ]
+              }
+            ]
+          }
+        ],
+        "needsReview": [
+          {
+            "counts": [
+              {
+                "atLeast": 1,
+                "of": [
+                  "c-killaura",
+                  "c-aim",
+                  "c-triggerbot",
+                  "c-autoclicker",
+                  "c-reach",
+                  "c-velocity",
+                  "c-criticals",
+                  "c-crystalaura",
+                  "c-hitbox"
+                ]
+              },
+              {
+                "atLeast": 2,
+                "of": [
+                  "m-fly",
+                  "m-speed",
+                  "m-timer",
+                  "m-scaffold",
+                  "m-nofall",
+                  "m-noslow",
+                  "m-step",
+                  "m-spider",
+                  "m-jesus",
+                  "m-blink",
+                  "m-longjump"
+                ]
+              },
+              {
+                "atLeast": 1,
+                "of": [
+                  "r-xray",
+                  "r-esp",
+                  "r-tracers",
+                  "r-wallhack",
+                  "r-chams",
+                  "i-autototem",
+                  "i-cheststealer",
+                  "i-autoarmor",
+                  "i-invmanager"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "recommendedAction": "Quarantine",
+      "reputationOnMatch": "Suspicious",
+      "confidenceRationale": "Generic heuristic: hacked clients organise cheats as one class per module inside 'module(s)'/'hack(s)' packages. The verified examples are Meteor Client (systems/modules/combat/KillAura), Wurst (hacks/KillauraHack), BleachHack (module/mods/Killaura), ThunderHack (features/modules/combat/Aura) and LiquidBounce (features/module/modules/combat/killaura/ModuleKillAura). Class names alone are weak evidence. This rule looks for the typical spread of a hacked client: combat, movement and render/inventory cheat modules in the same file.",
+      "falsePositiveNotes": "Legitimate mods occasionally use these words for class names inside 'features' or 'modules' packages. Several distinct module names must appear together before anything is reported, and legitimacy evidence overrides this heuristic.",
+      "limitations": "Obfuscated clients rename classes and are not found by this heuristic.",
+      "sources": [
+        {
+          "title": "Wurst7 hack modules, e.g. KillauraHack",
+          "url": "https://github.com/Wurst-Imperium/Wurst7/blob/master/src/main/java/net/wurstclient/hacks/KillauraHack.java",
+          "retrieved": "2026-10-11"
+        },
+        {
+          "title": "Meteor Client combat module KillAura",
+          "url": "https://github.com/MeteorDevelopment/meteor-client/blob/master/src/main/java/meteordevelopment/meteorclient/systems/modules/combat/KillAura.java",
+          "retrieved": "2026-10-11"
+        },
+        {
+          "title": "LiquidBounce ModuleKillAura",
+          "url": "https://github.com/CCBlueX/LiquidBounce/blob/nextgen/src/main/kotlin/net/ccbluex/liquidbounce/features/module/modules/combat/killaura/ModuleKillAura.kt",
+          "retrieved": "2026-10-11"
+        },
+        {
+          "title": "BleachHack Killaura module",
+          "url": "https://github.com/BleachDev/BleachHack/blob/1.19.4/src/main/java/org/bleachhack/module/mods/Killaura.java",
+          "retrieved": "2026-10-11"
+        },
+        {
+          "title": "ThunderHack combat module Aura",
+          "url": "https://github.com/Pan4ur/ThunderHack-Recode/blob/main/src/main/java/thunder/hack/features/modules/combat/Aura.java",
+          "retrieved": "2026-10-11"
+        }
+      ],
+      "verifiedOn": "2026-10-11"
+    },
+    {
+      "id": "CP-HEUR-0005",
+      "version": 1,
+      "family": "Known hacked-client name in file name",
+      "category": "HackedClient",
+      "severity": "Medium",
+      "appliesTo": [
+        "File"
+      ],
+      "fileExtensions": [
+        ".jar",
+        ".zip",
+        ".exe"
+      ],
+      "heuristic": true,
+      "indicators": [
+        {
+          "id": "name",
+          "type": "FileNamePattern",
+          "value": "(?i)(^|[^a-z])(wurst|meteor-client|liquidbounce|bleachhack|thunderhack)([^a-z]|$)",
+          "strength": "Weak",
+          "description": "File name contains the name of a known hacked client"
+        }
+      ],
+      "classification": {
+        "needsReview": [
+          {
+            "all": [
+              "name"
+            ]
+          }
+        ]
+      },
+      "recommendedAction": "ManualReview",
+      "reputationOnMatch": "Unknown",
+      "confidenceRationale": "A file name is weak evidence: anyone can name a file anything, so this alone only ever leads to 'Needs review' with a low severity.",
+      "falsePositiveNotes": "Unrelated files can contain these words. The file content decides; check the other evidence.",
+      "limitations": "Renamed files are not found by this rule.",
+      "sources": [],
+      "verifiedOn": "2026-10-11"
+    },
+    {
+      "id": "CP-HEUR-0006",
+      "version": 1,
+      "family": "X-ray resource pack (name based)",
+      "category": "XRayOrEsp",
+      "severity": "Low",
+      "appliesTo": [
+        "Archive"
+      ],
+      "fileExtensions": [
+        ".zip"
+      ],
+      "heuristic": true,
+      "indicators": [
+        {
+          "id": "name",
+          "type": "FileNamePattern",
+          "value": "(?i)x[-_ ]?ray",
+          "strength": "Weak",
+          "description": "Archive name mentions x-ray"
+        },
+        {
+          "id": "pack",
+          "type": "ArchiveEntry",
+          "value": "pack.mcmeta",
+          "strength": "Weak",
+          "description": "Archive is a Minecraft resource pack"
+        }
+      ],
+      "classification": {
+        "needsReview": [
+          {
+            "all": [
+              "name",
+              "pack"
+            ]
+          }
+        ]
+      },
+      "recommendedAction": "ManualReview",
+      "reputationOnMatch": "Unknown",
+      "confidenceRationale": "Resource packs that make ordinary blocks transparent are commonly called x-ray packs. Only the name is checked, so this is a prompt for review, not proof.",
+      "falsePositiveNotes": "Packs with x-ray in the name may be legitimate (for example x-ray themed decorations).",
+      "limitations": "Texture contents are not analysed.",
+      "sources": [],
+      "verifiedOn": "2026-10-11"
+    },
+    {
+      "id": "CP-AUTO-0001",
+      "version": 1,
+      "family": "Baritone (pathfinding/automation bot)",
+      "category": "GameplayAutomation",
+      "severity": "Low",
+      "appliesTo": [
+        "Archive"
+      ],
+      "fileExtensions": [
+        ".jar"
+      ],
+      "indicators": [
+        {
+          "id": "mod-id",
+          "type": "ModId",
+          "value": "baritone",
+          "strength": "Strong",
+          "description": "Mod metadata uses the Baritone mod id"
+        },
+        {
+          "id": "mixins",
+          "type": "ArchiveEntry",
+          "value": "mixins.baritone.json",
+          "strength": "Moderate",
+          "description": "Baritone mixin configuration"
+        }
+      ],
+      "classification": {
+        "needsReview": [
+          {
+            "any": [
+              "mod-id",
+              "mixins"
+            ]
+          }
+        ]
+      },
+      "recommendedAction": "ManualReview",
+      "reputationOnMatch": "Unknown",
+      "confidenceRationale": "Baritone is open-source automation software (LGPL). It is not malware and is allowed on some servers but forbidden on many, so it is only ever reported for review.",
+      "falsePositiveNotes": "Some legitimate clients bundle Baritone for single-player use.",
+      "limitations": "Whether Baritone is allowed depends on the server's rules.",
+      "sources": [
+        {
+          "title": "Baritone fabric.mod.json",
+          "url": "https://github.com/cabaletta/baritone/blob/1.21.1/fabric/src/main/resources/fabric.mod.json",
+          "retrieved": "2026-10-11"
+        }
+      ],
+      "verifiedOn": "2026-10-11"
+    },
+    {
+      "id": "CP-CFG-0001",
+      "version": 1,
+      "family": "Wurst Client configuration leftovers",
+      "category": "CheatConfiguration",
+      "severity": "Low",
+      "appliesTo": [
+        "File",
+        "Directory"
+      ],
+      "indicators": [
+        {
+          "id": "enabled-hacks",
+          "type": "RelativePath",
+          "value": "wurst/enabled-hacks.json",
+          "strength": "Strong",
+          "description": "Wurst list of enabled hacks"
+        },
+        {
+          "id": "keybinds",
+          "type": "RelativePath",
+          "value": "wurst/keybinds.json",
+          "strength": "Moderate",
+          "description": "Wurst keybind configuration"
+        },
+        {
+          "id": "folder",
+          "type": "DirectoryName",
+          "value": "wurst",
+          "atInstallationRoot": true,
+          "strength": "Moderate",
+          "description": "Wurst configuration folder"
+        }
+      ],
+      "classification": {
+        "knownMatch": [
+          {
+            "all": [
+              "enabled-hacks"
+            ]
+          }
+        ],
+        "needsReview": [
+          {
+            "any": [
+              "keybinds",
+              "folder"
+            ]
+          }
+        ]
+      },
+      "recommendedAction": "Quarantine",
+      "reputationOnMatch": "Suspicious",
+      "confidenceRationale": "WurstClient.java creates a 'wurst' folder in the game directory containing enabled-hacks.json, keybinds.json and other settings. These files show Wurst was installed at some point.",
+      "falsePositiveNotes": "A folder named 'wurst' could be created by something else; only enabled-hacks.json is treated as a known match.",
+      "limitations": "Configuration leftovers do not show when, or whether, the client was used.",
+      "sources": [
+        {
+          "title": "Wurst7 WurstClient.java (config folder and files)",
+          "url": "https://github.com/Wurst-Imperium/Wurst7/blob/master/src/main/java/net/wurstclient/WurstClient.java",
+          "retrieved": "2026-10-11"
+        }
+      ],
+      "verifiedOn": "2026-10-11"
+    },
+    {
+      "id": "CP-CFG-0002",
+      "version": 1,
+      "family": "Meteor Client data folder",
+      "category": "CheatConfiguration",
+      "severity": "Low",
+      "appliesTo": [
+        "Directory"
+      ],
+      "indicators": [
+        {
+          "id": "folder",
+          "type": "DirectoryName",
+          "value": "meteor-client",
+          "atInstallationRoot": true,
+          "strength": "Moderate",
+          "description": "Meteor Client data folder"
+        }
+      ],
+      "classification": {
+        "needsReview": [
+          {
+            "all": [
+              "folder"
+            ]
+          }
+        ]
+      },
+      "recommendedAction": "ManualReview",
+      "reputationOnMatch": "Suspicious",
+      "confidenceRationale": "MeteorClient.java stores its data in a folder named after its mod id ('meteor-client') in the game directory.",
+      "falsePositiveNotes": "Any program could create a folder with this name.",
+      "limitations": "Leftover folders do not show when, or whether, the client was used.",
+      "sources": [
+        {
+          "title": "Meteor Client MeteorClient.java (FOLDER)",
+          "url": "https://github.com/MeteorDevelopment/meteor-client/blob/master/src/main/java/meteordevelopment/meteorclient/MeteorClient.java",
+          "retrieved": "2026-10-11"
+        }
+      ],
+      "verifiedOn": "2026-10-11"
+    },
+    {
+      "id": "CP-CFG-0003",
+      "version": 1,
+      "family": "LiquidBounce data folder",
+      "category": "CheatConfiguration",
+      "severity": "Low",
+      "appliesTo": [
+        "Directory"
+      ],
+      "indicators": [
+        {
+          "id": "folder",
+          "type": "DirectoryName",
+          "value": "LiquidBounce",
+          "atInstallationRoot": true,
+          "strength": "Moderate",
+          "description": "LiquidBounce configuration folder"
+        }
+      ],
+      "classification": {
+        "needsReview": [
+          {
+            "all": [
+              "folder"
+            ]
+          }
+        ]
+      },
+      "recommendedAction": "ManualReview",
+      "reputationOnMatch": "Suspicious",
+      "confidenceRationale": "LiquidBounce's ConfigSystem creates a folder named CLIENT_NAME ('LiquidBounce') in the game directory.",
+      "falsePositiveNotes": "Any program could create a folder with this name.",
+      "limitations": "Leftover folders do not show when, or whether, the client was used.",
+      "sources": [
+        {
+          "title": "LiquidBounce ConfigSystem.kt (rootFolder)",
+          "url": "https://github.com/CCBlueX/LiquidBounce/blob/nextgen/src/main/kotlin/net/ccbluex/liquidbounce/config/ConfigSystem.kt",
+          "retrieved": "2026-10-11"
+        },
+        {
+          "title": "LiquidBounce.kt (CLIENT_NAME)",
+          "url": "https://github.com/CCBlueX/LiquidBounce/blob/nextgen/src/main/kotlin/net/ccbluex/liquidbounce/LiquidBounce.kt",
+          "retrieved": "2026-10-11"
+        }
+      ],
+      "verifiedOn": "2026-10-11"
+    },
+    {
+      "id": "CP-MAL-0001",
+      "version": 1,
+      "family": "fractureiser stage 0 (infected mod or plugin)",
+      "category": "Malware",
+      "severity": "Critical",
+      "appliesTo": [
+        "Archive"
+      ],
+      "fileExtensions": [
+        ".jar",
+        ".zip",
+        ".litemod"
+      ],
+      "indicators": [
+        {
+          "id": "sig1",
+          "type": "BytecodeSignature",
+          "strength": "Definitive",
+          "description": "Stage 0 loader: reflective URLClassLoader download-and-run sequence",
+          "bytecode": {
+            "mode": "OrderedOpcodeFilter",
+            "instructions": [
+              {
+                "op": "NEW",
+                "type": "java/lang/String"
+              },
+              {
+                "op": "INVOKESPECIAL",
+                "owner": "java/lang/String",
+                "name": "<init>",
+                "desc": "([B)V"
+              },
+              {
+                "op": "NEW",
+                "type": "java/lang/String"
+              },
+              {
+                "op": "INVOKESPECIAL",
+                "owner": "java/lang/String",
+                "name": "<init>",
+                "desc": "([B)V"
+              },
+              {
+                "op": "INVOKESTATIC",
+                "owner": "java/lang/Class",
+                "name": "forName",
+                "desc": "(Ljava/lang/String;)Ljava/lang/Class;"
+              },
+              {
+                "op": "INVOKEVIRTUAL",
+                "owner": "java/lang/Class",
+                "name": "getConstructor",
+                "desc": "([Ljava/lang/Class;)Ljava/lang/reflect/Constructor;"
+              },
+              {
+                "op": "INVOKESPECIAL",
+                "owner": "java/lang/String",
+                "name": "<init>",
+                "desc": "([B)V"
+              },
+              {
+                "op": "INVOKESPECIAL",
+                "owner": "java/lang/String",
+                "name": "<init>",
+                "desc": "([B)V"
+              },
+              {
+                "op": "INVOKESPECIAL",
+                "owner": "java/lang/String",
+                "name": "<init>",
+                "desc": "([B)V"
+              },
+              {
+                "op": "INVOKESPECIAL",
+                "owner": "java/net/URL",
+                "name": "<init>",
+                "desc": "(Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;)V"
+              },
+              {
+                "op": "INVOKEVIRTUAL",
+                "owner": "java/lang/reflect/Constructor",
+                "name": "newInstance",
+                "desc": "([Ljava/lang/Object;)Ljava/lang/Object;"
+              },
+              {
+                "op": "INVOKESTATIC",
+                "owner": "java/lang/Class",
+                "name": "forName",
+                "desc": "(Ljava/lang/String;ZLjava/lang/ClassLoader;)Ljava/lang/Class;"
+              },
+              {
+                "op": "INVOKESPECIAL",
+                "owner": "java/lang/String",
+                "name": "<init>",
+                "desc": "([B)V"
+              },
+              {
+                "op": "INVOKEVIRTUAL",
+                "owner": "java/lang/Class",
+                "name": "getMethod",
+                "desc": "(Ljava/lang/String;[Ljava/lang/Class;)Ljava/lang/reflect/Method;"
+              },
+              {
+                "op": "INVOKEVIRTUAL",
+                "owner": "java/lang/reflect/Method",
+                "name": "invoke",
+                "desc": "(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;"
+              }
+            ]
+          }
+        },
+        {
+          "id": "sig2",
+          "type": "BytecodeSignature",
+          "strength": "Strong",
+          "description": "Stage 0 variant: Runtime.exec of a Base64-decoded command",
+          "bytecode": {
+            "mode": "OrderedOpcodeFilterAnyStart",
+            "instructions": [
+              {
+                "op": "INVOKESTATIC",
+                "owner": "java/lang/Runtime",
+                "name": "getRuntime",
+                "desc": "()Ljava/lang/Runtime;"
+              },
+              {
+                "op": "INVOKESTATIC",
+                "owner": "java/util/Base64",
+                "name": "getDecoder",
+                "desc": "()Ljava/util/Base64$Decoder;"
+              },
+              {
+                "op": "INVOKEVIRTUAL",
+                "owner": "java/lang/String",
+                "name": "concat",
+                "desc": "(Ljava/lang/String;)Ljava/lang/String;"
+              },
+              {
+                "op": "INVOKEVIRTUAL",
+                "owner": "java/util/Base64$Decoder",
+                "name": "decode",
+                "desc": "(Ljava/lang/String;)[B"
+              },
+              {
+                "op": "INVOKESPECIAL",
+                "owner": "java/lang/String",
+                "name": "<init>",
+                "desc": "([B)V"
+              },
+              {
+                "op": "INVOKEVIRTUAL",
+                "owner": "java/io/File",
+                "name": "getPath",
+                "desc": "()Ljava/lang/String;"
+              },
+              {
+                "op": "INVOKEVIRTUAL",
+                "owner": "java/lang/Runtime",
+                "name": "exec",
+                "desc": "([Ljava/lang/String;)Ljava/lang/Process;"
+              }
+            ]
+          }
+        },
+        {
+          "id": "sig3",
+          "type": "BytecodeSignature",
+          "strength": "Strong",
+          "description": "Byte array spelling the original stage 0 command-and-control address",
+          "bytecode": {
+            "mode": "Contiguous",
+            "instructions": [
+              {
+                "op": "BIPUSH",
+                "operand": 56
+              },
+              {
+                "op": "BASTORE"
+              },
+              {
+                "op": "DUP"
+              },
+              {
+                "op": "ICONST_1"
+              },
+              {
+                "op": "BIPUSH",
+                "operand": 53
+              },
+              {
+                "op": "BASTORE"
+              },
+              {
+                "op": "DUP"
+              },
+              {
+                "op": "ICONST_2"
+              },
+              {
+                "op": "BIPUSH",
+                "operand": 46
+              },
+              {
+                "op": "BASTORE"
+              },
+              {
+                "op": "DUP"
+              },
+              {
+                "op": "ICONST_3"
+              },
+              {
+                "op": "BIPUSH",
+                "operand": 50
+              },
+              {
+                "op": "BASTORE"
+              },
+              {
+                "op": "DUP"
+              },
+              {
+                "op": "ICONST_4"
+              },
+              {
+                "op": "BIPUSH",
+                "operand": 49
+              },
+              {
+                "op": "BASTORE"
+              },
+              {
+                "op": "DUP"
+              },
+              {
+                "op": "ICONST_5"
+              },
+              {
+                "op": "BIPUSH",
+                "operand": 55
+              },
+              {
+                "op": "BASTORE"
+              },
+              {
+                "op": "DUP"
+              },
+              {
+                "op": "BIPUSH",
+                "operand": 6
+              },
+              {
+                "op": "BIPUSH",
+                "operand": 46
+              },
+              {
+                "op": "BASTORE"
+              },
+              {
+                "op": "DUP"
+              },
+              {
+                "op": "BIPUSH",
+                "operand": 7
+              },
+              {
+                "op": "BIPUSH",
+                "operand": 49
+              },
+              {
+                "op": "BASTORE"
+              },
+              {
+                "op": "DUP"
+              },
+              {
+                "op": "BIPUSH",
+                "operand": 8
+              },
+              {
+                "op": "BIPUSH",
+                "operand": 52
+              },
+              {
+                "op": "BASTORE"
+              },
+              {
+                "op": "DUP"
+              },
+              {
+                "op": "BIPUSH",
+                "operand": 9
+              },
+              {
+                "op": "BIPUSH",
+                "operand": 52
+              },
+              {
+                "op": "BASTORE"
+              },
+              {
+                "op": "DUP"
+              },
+              {
+                "op": "BIPUSH",
+                "operand": 10
+              },
+              {
+                "op": "BIPUSH",
+                "operand": 46
+              },
+              {
+                "op": "BASTORE"
+              },
+              {
+                "op": "DUP"
+              },
+              {
+                "op": "BIPUSH",
+                "operand": 11
+              },
+              {
+                "op": "BIPUSH",
+                "operand": 49
+              },
+              {
+                "op": "BASTORE"
+              },
+              {
+                "op": "DUP"
+              },
+              {
+                "op": "BIPUSH",
+                "operand": 12
+              },
+              {
+                "op": "BIPUSH",
+                "operand": 51
+              },
+              {
+                "op": "BASTORE"
+              },
+              {
+                "op": "DUP"
+              },
+              {
+                "op": "BIPUSH",
+                "operand": 13
+              },
+              {
+                "op": "BIPUSH",
+                "operand": 48
+              }
+            ]
+          }
+        }
+      ],
+      "classification": {
+        "knownMatch": [
+          {
+            "all": [
+              "sig1"
+            ]
+          }
+        ],
+        "highConfidenceSuspicion": [
+          {
+            "any": [
+              "sig2",
+              "sig3"
+            ]
+          }
+        ]
+      },
+      "recommendedAction": "QuarantineAndCheckSystem",
+      "reputationOnMatch": "KnownMalicious",
+      "confidenceRationale": "Instruction sequences published by the fractureiser investigators in nekodetector. Its author describes the first signature as a definite detection and the other two as near-certain and likely detections; they are matched statically without running any code.",
+      "falsePositiveNotes": "The investigation notes that some early stage 0 scanners produced false positives on popular mods; these signatures are the later, specific ones. The third signature uses strict contiguous matching, which is at least as specific as nekodetector's.",
+      "limitations": "Only the documented stage 0 variants are recognised. If stage 0 was found, later stages may have run: check the system-artifact findings and run a full antivirus scan.",
+      "sources": [
+        {
+          "title": "nekodetector Detector.java (stage 0 signatures and stage 2 checks)",
+          "url": "https://github.com/MCRcortex/nekodetector/blob/master/src/main/java/me/cortex/jarscanner/Detector.java",
+          "retrieved": "2026-10-11"
+        },
+        {
+          "title": "fractureiser investigation: technical analysis",
+          "url": "https://github.com/fractureiser-investigation/fractureiser/blob/main/docs/tech.md",
+          "retrieved": "2026-10-11"
+        },
+        {
+          "title": "fractureiser investigation: user guide (Am I infected?)",
+          "url": "https://github.com/fractureiser-investigation/fractureiser/blob/main/docs/users.md",
+          "retrieved": "2026-10-11"
+        }
+      ],
+      "verifiedOn": "2026-10-11"
+    },
+    {
+      "id": "CP-MAL-0002",
+      "version": 1,
+      "family": "fractureiser stage 2 (lib.jar / libWebGL64.jar)",
+      "category": "Malware",
+      "severity": "Critical",
+      "appliesTo": [
+        "File"
+      ],
+      "indicators": [
+        {
+          "id": "sha1-a",
+          "type": "Sha1",
+          "value": "52d08736543a240b0cbbbf2da03691ae525bb119",
+          "strength": "Definitive",
+          "description": "Published stage 2 SHA-1"
+        },
+        {
+          "id": "sha1-b",
+          "type": "Sha1",
+          "value": "6ec85c8112c25abe4a71998eb32480d266408863",
+          "strength": "Definitive",
+          "description": "Published stage 2 SHA-1 (earlier sample)"
+        }
+      ],
+      "classification": {
+        "knownMatch": [
+          {
+            "any": [
+              "sha1-a",
+              "sha1-b"
+            ]
+          }
+        ]
+      },
+      "recommendedAction": "QuarantineAndCheckSystem",
+      "reputationOnMatch": "KnownMalicious",
+      "confidenceRationale": "Exact file hashes published in the fractureiser technical analysis.",
+      "falsePositiveNotes": "A hash match is exact; false positives are not expected.",
+      "limitations": "Other builds of stage 2 have different hashes.",
+      "sources": [
+        {
+          "title": "fractureiser investigation: technical analysis",
+          "url": "https://github.com/fractureiser-investigation/fractureiser/blob/main/docs/tech.md",
+          "retrieved": "2026-10-11"
+        }
+      ],
+      "verifiedOn": "2026-10-11"
+    },
+    {
+      "id": "CP-MAL-0003",
+      "version": 1,
+      "family": "fractureiser stage 2 persistence folder",
+      "category": "Malware",
+      "severity": "Critical",
+      "appliesTo": [
+        "Directory"
+      ],
+      "platforms": [
+        "windows"
+      ],
+      "indicators": [
+        {
+          "id": "local",
+          "type": "KnownLocation",
+          "value": "%LOCALAPPDATA%\\Microsoft Edge",
+          "expect": "Directory",
+          "strength": "Strong",
+          "description": "Folder named 'Microsoft Edge' (with a space) in Local AppData; the real Edge uses 'Microsoft\\Edge'"
+        },
+        {
+          "id": "roaming",
+          "type": "KnownLocation",
+          "value": "%APPDATA%\\Microsoft Edge",
+          "expect": "Directory",
+          "strength": "Strong",
+          "description": "Folder named 'Microsoft Edge' (with a space) in Roaming AppData, as checked by nekodetector"
+        }
+      ],
+      "classification": {
+        "highConfidenceSuspicion": [
+          {
+            "any": [
+              "local",
+              "roaming"
+            ]
+          }
+        ]
+      },
+      "recommendedAction": "QuarantineAndCheckSystem",
+      "reputationOnMatch": "KnownMalicious",
+      "confidenceRationale": "The fractureiser user guide states that a 'Microsoft Edge' folder (with a space) in %LOCALAPPDATA% means stage 2 ran. The folder name alone is reported as a high-confidence suspicion; its contents are checked by separate rules.",
+      "falsePositiveNotes": "Legitimate Edge data lives in 'Microsoft\\Edge' or 'MicrosoftEdge' (no space). Another program could, in theory, create this name.",
+      "limitations": "If stage 2 ran, stage 3 may have stolen credentials. Change passwords from a clean device and run a full antivirus scan.",
+      "sources": [
+        {
+          "title": "fractureiser investigation: user guide (Am I infected?)",
+          "url": "https://github.com/fractureiser-investigation/fractureiser/blob/main/docs/users.md",
+          "retrieved": "2026-10-11"
+        },
+        {
+          "title": "nekodetector Detector.java (stage 0 signatures and stage 2 checks)",
+          "url": "https://github.com/MCRcortex/nekodetector/blob/master/src/main/java/me/cortex/jarscanner/Detector.java",
+          "retrieved": "2026-10-11"
+        }
+      ],
+      "verifiedOn": "2026-10-11"
+    },
+    {
+      "id": "CP-MAL-0004",
+      "version": 1,
+      "family": "fractureiser stage 2/3 files",
+      "category": "Malware",
+      "severity": "Critical",
+      "appliesTo": [
+        "File"
+      ],
+      "platforms": [
+        "windows"
+      ],
+      "indicators": [
+        {
+          "id": "webgl",
+          "type": "KnownLocation",
+          "value": "%LOCALAPPDATA%\\Microsoft Edge\\libWebGL64.jar",
+          "expect": "File",
+          "strength": "Strong",
+          "description": "Stage 2 file name on Windows"
+        },
+        {
+          "id": "webgl-roaming",
+          "type": "KnownLocation",
+          "value": "%APPDATA%\\Microsoft Edge\\libWebGL64.jar",
+          "expect": "File",
+          "strength": "Strong",
+          "description": "Stage 2 file name on Windows"
+        },
+        {
+          "id": "libdll",
+          "type": "KnownLocation",
+          "value": "%LOCALAPPDATA%\\Microsoft Edge\\lib.dll",
+          "expect": "File",
+          "strength": "Moderate",
+          "description": "File listed by nekodetector"
+        },
+        {
+          "id": "ref",
+          "type": "KnownLocation",
+          "value": "%LOCALAPPDATA%\\Microsoft Edge\\.ref",
+          "expect": "File",
+          "strength": "Moderate",
+          "description": "Stage 1/2 infection-source identifier file"
+        },
+        {
+          "id": "client",
+          "type": "KnownLocation",
+          "value": "%LOCALAPPDATA%\\Microsoft Edge\\client.jar",
+          "expect": "File",
+          "strength": "Strong",
+          "description": "Stage 3 file downloaded by stage 2"
+        }
+      ],
+      "classification": {
+        "knownMatch": [
+          {
+            "any": [
+              "webgl",
+              "webgl-roaming"
+            ]
+          }
+        ],
+        "highConfidenceSuspicion": [
+          {
+            "any": [
+              "libdll",
+              "ref",
+              "client"
+            ]
+          }
+        ]
+      },
+      "recommendedAction": "QuarantineAndCheckSystem",
+      "reputationOnMatch": "KnownMalicious",
+      "confidenceRationale": "File names and locations documented in the fractureiser technical analysis (stage 1 downloads libWebGL64.jar, stage 2 reads .ref and writes client.jar) and in nekodetector's stage 2 check.",
+      "falsePositiveNotes": "These names are only meaningful inside the disguised 'Microsoft Edge' folder.",
+      "limitations": "Stage 3 can steal browser, Discord and Minecraft credentials. Change passwords from a clean device and run a full antivirus scan.",
+      "sources": [
+        {
+          "title": "fractureiser investigation: technical analysis",
+          "url": "https://github.com/fractureiser-investigation/fractureiser/blob/main/docs/tech.md",
+          "retrieved": "2026-10-11"
+        },
+        {
+          "title": "fractureiser investigation: user guide (Am I infected?)",
+          "url": "https://github.com/fractureiser-investigation/fractureiser/blob/main/docs/users.md",
+          "retrieved": "2026-10-11"
+        },
+        {
+          "title": "nekodetector Detector.java (stage 0 signatures and stage 2 checks)",
+          "url": "https://github.com/MCRcortex/nekodetector/blob/master/src/main/java/me/cortex/jarscanner/Detector.java",
+          "retrieved": "2026-10-11"
+        }
+      ],
+      "verifiedOn": "2026-10-11"
+    },
+    {
+      "id": "CP-MAL-0005",
+      "version": 1,
+      "family": "fractureiser stage 3 client (NekoClient)",
+      "category": "Malware",
+      "severity": "Critical",
+      "appliesTo": [
+        "Archive"
+      ],
+      "fileExtensions": [
+        ".jar"
+      ],
+      "indicators": [
+        {
+          "id": "nekoclient",
+          "type": "ClassPackagePrefix",
+          "value": "dev/neko/nekoclient/",
+          "strength": "Definitive",
+          "description": "Stage 3 package dev.neko.nekoclient"
+        },
+        {
+          "id": "neko",
+          "type": "ClassPackagePrefix",
+          "value": "dev/neko/",
+          "strength": "Strong",
+          "description": "Package root used by all fractureiser stage 3 classes"
+        }
+      ],
+      "classification": {
+        "knownMatch": [
+          {
+            "all": [
+              "nekoclient"
+            ]
+          }
+        ],
+        "highConfidenceSuspicion": [
+          {
+            "all": [
+              "neko"
+            ]
+          }
+        ]
+      },
+      "recommendedAction": "QuarantineAndCheckSystem",
+      "reputationOnMatch": "KnownMalicious",
+      "confidenceRationale": "The technical analysis documents stage 3 classes under dev/neko/nekoclient (for example dev.neko.nekoclient.Client).",
+      "falsePositiveNotes": "No legitimate Minecraft software is known to use the dev.neko package.",
+      "limitations": "Obfuscated variants may use other package names.",
+      "sources": [
+        {
+          "title": "fractureiser investigation: technical analysis",
+          "url": "https://github.com/fractureiser-investigation/fractureiser/blob/main/docs/tech.md",
+          "retrieved": "2026-10-11"
+        }
+      ],
+      "verifiedOn": "2026-10-11"
+    },
+    {
+      "id": "CP-MAL-0006",
+      "version": 1,
+      "family": "fractureiser stage 3b persistence",
+      "category": "Malware",
+      "severity": "Critical",
+      "appliesTo": [
+        "File",
+        "Directory"
+      ],
+      "platforms": [
+        "windows"
+      ],
+      "indicators": [
+        {
+          "id": "vm-core",
+          "type": "KnownLocation",
+          "value": "%USERPROFILE%\\AppData\\LocalLow\\Microsoft\\Internet Explorer\\DOMStore\\microsoft-vm-core",
+          "expect": "Any",
+          "strength": "Strong",
+          "description": "Stage 3b persistence file"
+        },
+        {
+          "id": "task",
+          "type": "KnownLocation",
+          "value": "%WINDIR%\\System32\\Tasks\\MicrosoftEdgeUpdateTaskMachineVM",
+          "expect": "File",
+          "strength": "Strong",
+          "description": "Stage 3b scheduled task"
+        }
+      ],
+      "classification": {
+        "highConfidenceSuspicion": [
+          {
+            "any": [
+              "vm-core",
+              "task"
+            ]
+          }
+        ]
+      },
+      "recommendedAction": "QuarantineAndCheckSystem",
+      "reputationOnMatch": "KnownMalicious",
+      "confidenceRationale": "Persistence locations documented for the stage 3b replacement payload in the fractureiser technical analysis.",
+      "falsePositiveNotes": "The task name imitates Microsoft Edge update tasks; legitimate Edge tasks are named MicrosoftEdgeUpdateTaskMachineCore/UA, without 'VM'.",
+      "limitations": "Scheduled tasks live in a protected Windows folder and are never modified by this application. Remove the task with Task Scheduler (taskschd.msc) or your antivirus.",
+      "sources": [
+        {
+          "title": "fractureiser investigation: technical analysis",
+          "url": "https://github.com/fractureiser-investigation/fractureiser/blob/main/docs/tech.md",
+          "retrieved": "2026-10-11"
+        }
+      ],
+      "verifiedOn": "2026-10-11"
+    },
+    {
+      "id": "CP-MAL-0007",
+      "version": 1,
+      "family": "fractureiser startup persistence",
+      "category": "Malware",
+      "severity": "Critical",
+      "appliesTo": [
+        "StartupEntry",
+        "File"
+      ],
+      "platforms": [
+        "windows"
+      ],
+      "indicators": [
+        {
+          "id": "run-webgl",
+          "type": "StartupCommandPattern",
+          "value": "(?i)libWebGL64\\.jar",
+          "strength": "Strong",
+          "description": "Startup entry launches the stage 2 file"
+        },
+        {
+          "id": "run-folder",
+          "type": "StartupCommandPattern",
+          "value": "(?i)\\\\AppData\\\\(Local|Roaming)\\\\Microsoft Edge\\\\",
+          "strength": "Strong",
+          "description": "Startup entry runs a program from the disguised 'Microsoft Edge' folder"
+        },
+        {
+          "id": "startup-webgl",
+          "type": "FileName",
+          "value": "libWebGL64.jar",
+          "locationTemplate": "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup",
+          "strength": "Strong",
+          "description": "Stage 2 file in the Startup folder"
+        },
+        {
+          "id": "startup-ref",
+          "type": "FileName",
+          "value": ".ref",
+          "locationTemplate": "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup",
+          "strength": "Weak",
+          "description": "File name listed by nekodetector"
+        },
+        {
+          "id": "startup-client",
+          "type": "FileName",
+          "value": "client.jar",
+          "locationTemplate": "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup",
+          "strength": "Weak",
+          "description": "File name listed by nekodetector"
+        },
+        {
+          "id": "startup-libdll",
+          "type": "FileName",
+          "value": "lib.dll",
+          "locationTemplate": "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup",
+          "strength": "Weak",
+          "description": "File name listed by nekodetector"
+        },
+        {
+          "id": "startup-runbat",
+          "type": "FileName",
+          "value": "run.bat",
+          "locationTemplate": "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup",
+          "strength": "Weak",
+          "description": "File name listed by nekodetector"
+        }
+      ],
+      "classification": {
+        "highConfidenceSuspicion": [
+          {
+            "any": [
+              "run-webgl",
+              "run-folder",
+              "startup-webgl"
+            ]
+          }
+        ],
+        "needsReview": [
+          {
+            "any": [
+              "startup-ref",
+              "startup-client",
+              "startup-libdll",
+              "startup-runbat"
+            ]
+          }
+        ]
+      },
+      "recommendedAction": "QuarantineAndCheckSystem",
+      "reputationOnMatch": "KnownMalicious",
+      "confidenceRationale": "Stage 1 adds stage 2 to HKCU\\...\\Run or, failing that, the Startup folder (fractureiser technical analysis). nekodetector lists the file names it checks in the Startup folder; generic names such as run.bat are only reported for review.",
+      "falsePositiveNotes": "Generic names like run.bat or client.jar can belong to legitimate programs.",
+      "limitations": "Registry startup entries are reported but never edited by this application. Remove them with Task Manager (Startup apps) or your antivirus after confirming.",
+      "sources": [
+        {
+          "title": "fractureiser investigation: technical analysis",
+          "url": "https://github.com/fractureiser-investigation/fractureiser/blob/main/docs/tech.md",
+          "retrieved": "2026-10-11"
+        },
+        {
+          "title": "nekodetector Detector.java (stage 0 signatures and stage 2 checks)",
+          "url": "https://github.com/MCRcortex/nekodetector/blob/master/src/main/java/me/cortex/jarscanner/Detector.java",
+          "retrieved": "2026-10-11"
+        }
+      ],
+      "verifiedOn": "2026-10-11"
+    },
+    {
+      "id": "CP-LEGIT-0001",
+      "version": 1,
+      "family": "Sodium",
+      "category": "LegitimateSoftware",
+      "severity": "None",
+      "appliesTo": [
+        "Archive"
+      ],
+      "fileExtensions": [
+        ".jar"
+      ],
+      "indicators": [
+        {
+          "id": "mod-id",
+          "type": "ModId",
+          "value": "sodium",
+          "strength": "Strong",
+          "description": "Sodium mod id"
+        },
+        {
+          "id": "package",
+          "type": "ClassPackagePrefix",
+          "value": "net/caffeinemc/mods/sodium/",
+          "strength": "Strong",
+          "description": "Sodium package"
+        }
+      ],
+      "classification": {
+        "likelyLegitimate": [
+          {
+            "all": [
+              "mod-id",
+              "package"
+            ]
+          }
+        ]
+      },
+      "recommendedAction": "NoAction",
+      "reputationOnMatch": "KnownLegitimate",
+      "confidenceRationale": "Identifiers taken from the official Sodium source repository. Identity metadata can be copied, so this is supporting evidence and never overrides a specific detection rule.",
+      "falsePositiveNotes": "A malicious file could imitate these identifiers; specific detection rules still apply.",
+      "limitations": "Legitimacy evidence is not a guarantee.",
+      "sources": [
+        {
+          "title": "Sodium fabric.mod.json",
+          "url": "https://github.com/CaffeineMC/sodium/blob/dev/fabric/src/main/resources/fabric.mod.json",
+          "retrieved": "2026-10-11"
+        }
+      ],
+      "verifiedOn": "2026-10-11"
+    },
+    {
+      "id": "CP-LEGIT-0002",
+      "version": 1,
+      "family": "Iris Shaders",
+      "category": "LegitimateSoftware",
+      "severity": "None",
+      "appliesTo": [
+        "Archive"
+      ],
+      "fileExtensions": [
+        ".jar"
+      ],
+      "indicators": [
+        {
+          "id": "mod-id",
+          "type": "ModId",
+          "value": "iris",
+          "strength": "Strong",
+          "description": "Iris Shaders mod id"
+        },
+        {
+          "id": "package",
+          "type": "ClassPackagePrefix",
+          "value": "net/irisshaders/iris/",
+          "strength": "Strong",
+          "description": "Iris Shaders package"
+        }
+      ],
+      "classification": {
+        "likelyLegitimate": [
+          {
+            "all": [
+              "mod-id",
+              "package"
+            ]
+          }
+        ]
+      },
+      "recommendedAction": "NoAction",
+      "reputationOnMatch": "KnownLegitimate",
+      "confidenceRationale": "Identifiers taken from the official Iris Shaders source repository. Identity metadata can be copied, so this is supporting evidence and never overrides a specific detection rule.",
+      "falsePositiveNotes": "A malicious file could imitate these identifiers; specific detection rules still apply.",
+      "limitations": "Legitimacy evidence is not a guarantee.",
+      "sources": [
+        {
+          "title": "Iris fabric.mod.json",
+          "url": "https://github.com/IrisShaders/Iris/blob/1.21.4/fabric/src/main/resources/fabric.mod.json",
+          "retrieved": "2026-10-11"
+        }
+      ],
+      "verifiedOn": "2026-10-11"
+    },
+    {
+      "id": "CP-LEGIT-0003",
+      "version": 1,
+      "family": "Lithium",
+      "category": "LegitimateSoftware",
+      "severity": "None",
+      "appliesTo": [
+        "Archive"
+      ],
+      "fileExtensions": [
+        ".jar"
+      ],
+      "indicators": [
+        {
+          "id": "mod-id",
+          "type": "ModId",
+          "value": "lithium",
+          "strength": "Strong",
+          "description": "Lithium mod id"
+        },
+        {
+          "id": "package",
+          "type": "ClassPackagePrefix",
+          "value": "net/caffeinemc/mods/lithium/",
+          "strength": "Strong",
+          "description": "Lithium package"
+        }
+      ],
+      "classification": {
+        "likelyLegitimate": [
+          {
+            "all": [
+              "mod-id",
+              "package"
+            ]
+          }
+        ]
+      },
+      "recommendedAction": "NoAction",
+      "reputationOnMatch": "KnownLegitimate",
+      "confidenceRationale": "Identifiers taken from the official Lithium source repository. Identity metadata can be copied, so this is supporting evidence and never overrides a specific detection rule.",
+      "falsePositiveNotes": "A malicious file could imitate these identifiers; specific detection rules still apply.",
+      "limitations": "Legitimacy evidence is not a guarantee.",
+      "sources": [
+        {
+          "title": "Lithium fabric.mod.json",
+          "url": "https://github.com/CaffeineMC/lithium/blob/develop/fabric/src/main/resources/fabric.mod.json",
+          "retrieved": "2026-10-11"
+        }
+      ],
+      "verifiedOn": "2026-10-11"
+    },
+    {
+      "id": "CP-LEGIT-0004",
+      "version": 1,
+      "family": "Mod Menu",
+      "category": "LegitimateSoftware",
+      "severity": "None",
+      "appliesTo": [
+        "Archive"
+      ],
+      "fileExtensions": [
+        ".jar"
+      ],
+      "indicators": [
+        {
+          "id": "mod-id",
+          "type": "ModId",
+          "value": "modmenu",
+          "strength": "Strong",
+          "description": "Mod Menu mod id"
+        },
+        {
+          "id": "package",
+          "type": "ClassPackagePrefix",
+          "value": "com/terraformersmc/modmenu/",
+          "strength": "Strong",
+          "description": "Mod Menu package"
+        }
+      ],
+      "classification": {
+        "likelyLegitimate": [
+          {
+            "all": [
+              "mod-id",
+              "package"
+            ]
+          }
+        ]
+      },
+      "recommendedAction": "NoAction",
+      "reputationOnMatch": "KnownLegitimate",
+      "confidenceRationale": "Identifiers taken from the official Mod Menu source repository. Identity metadata can be copied, so this is supporting evidence and never overrides a specific detection rule.",
+      "falsePositiveNotes": "A malicious file could imitate these identifiers; specific detection rules still apply.",
+      "limitations": "Legitimacy evidence is not a guarantee.",
+      "sources": [
+        {
+          "title": "Mod Menu fabric.mod.json",
+          "url": "https://github.com/TerraformersMC/ModMenu/blob/1.21/src/main/resources/fabric.mod.json",
+          "retrieved": "2026-10-11"
+        }
+      ],
+      "verifiedOn": "2026-10-11"
+    },
+    {
+      "id": "CP-LEGIT-0005",
+      "version": 1,
+      "family": "Fabric Loader",
+      "category": "LegitimateSoftware",
+      "severity": "None",
+      "appliesTo": [
+        "Archive"
+      ],
+      "fileExtensions": [
+        ".jar"
+      ],
+      "indicators": [
+        {
+          "id": "mod-id",
+          "type": "ModId",
+          "value": "fabricloader",
+          "strength": "Strong",
+          "description": "Fabric Loader mod id"
+        }
+      ],
+      "classification": {
+        "likelyLegitimate": [
+          {
+            "all": [
+              "mod-id"
+            ]
+          }
+        ]
+      },
+      "recommendedAction": "NoAction",
+      "reputationOnMatch": "KnownLegitimate",
+      "confidenceRationale": "Identifiers taken from the official Fabric Loader source repository. Identity metadata can be copied, so this is supporting evidence and never overrides a specific detection rule.",
+      "falsePositiveNotes": "A malicious file could imitate these identifiers; specific detection rules still apply.",
+      "limitations": "Legitimacy evidence is not a guarantee.",
+      "sources": [
+        {
+          "title": "Fabric Loader fabric.mod.json",
+          "url": "https://github.com/FabricMC/fabric-loader/blob/master/src/main/resources/fabric.mod.json",
+          "retrieved": "2026-10-11"
+        }
+      ],
+      "verifiedOn": "2026-10-11"
+    },
+    {
+      "id": "CP-LEGIT-0006",
+      "version": 1,
+      "family": "Fabric API",
+      "category": "LegitimateSoftware",
+      "severity": "None",
+      "appliesTo": [
+        "Archive"
+      ],
+      "fileExtensions": [
+        ".jar"
+      ],
+      "indicators": [
+        {
+          "id": "mod-id",
+          "type": "ModId",
+          "value": "fabric-api",
+          "strength": "Strong",
+          "description": "Fabric API mod id"
+        }
+      ],
+      "classification": {
+        "likelyLegitimate": [
+          {
+            "all": [
+              "mod-id"
+            ]
+          }
+        ]
+      },
+      "recommendedAction": "NoAction",
+      "reputationOnMatch": "KnownLegitimate",
+      "confidenceRationale": "Identifiers taken from the official Fabric API source repository. Identity metadata can be copied, so this is supporting evidence and never overrides a specific detection rule.",
+      "falsePositiveNotes": "A malicious file could imitate these identifiers; specific detection rules still apply.",
+      "limitations": "Legitimacy evidence is not a guarantee.",
+      "sources": [
+        {
+          "title": "Fabric API fabric.mod.json",
+          "url": "https://github.com/FabricMC/fabric/blob/1.21.1/src/main/resources/fabric.mod.json",
+          "retrieved": "2026-10-11"
+        }
+      ],
+      "verifiedOn": "2026-10-11"
+    },
+    {
+      "id": "CP-TEST-0001",
+      "version": 1,
+      "family": "Minecraft Cleaner Pro harmless test file",
+      "category": "TestSignature",
+      "severity": "Informational",
+      "appliesTo": [
+        "File"
+      ],
+      "indicators": [
+        {
+          "id": "sha256",
+          "type": "Sha256",
+          "value": "6fab04ffb2267b6330c4551365755c5dbb072ba7bc0b98d14fde7dc6d27cacae",
+          "strength": "Definitive",
+          "description": "Hash of the harmless test file"
+        },
+        {
+          "id": "name",
+          "type": "FileName",
+          "value": "cleanerpro-harmless-test.txt",
+          "strength": "Weak",
+          "description": "Name of the harmless test file"
+        }
+      ],
+      "classification": {
+        "knownMatch": [
+          {
+            "all": [
+              "sha256"
+            ]
+          }
+        ],
+        "needsReview": [
+          {
+            "all": [
+              "name"
+            ]
+          }
+        ]
+      },
+      "recommendedAction": "Quarantine",
+      "reputationOnMatch": "Unknown",
+      "confidenceRationale": "Exact SHA-256 of the harmless test file created by 'Run detection self-test' (see docs/DETECTION.md). It contains only text and lets you verify detection, quarantine and restore safely.",
+      "falsePositiveNotes": "None: the file is harmless by design.",
+      "limitations": "Test signature only.",
+      "sources": [],
+      "verifiedOn": "2026-10-11"
+    }
+  ]
+}
