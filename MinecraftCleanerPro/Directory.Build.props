@@ -10,6 +10,8 @@
     <!-- Allows the WPF project to be compiled on non-Windows build agents. The app itself only runs on Windows. -->
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- Symbols are embedded in each assembly so the published release is a single executable. -->
+    <DebugType>embedded</DebugType>
 
     <Version>1.0.0</Version>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>

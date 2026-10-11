@@ -1,0 +1,78 @@
+<UserControl x:Class="CleanerPro.App.Views.InstallationsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Grid Margin="{StaticResource Space.Page}">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="{StaticResource Space.Gap}">
+      <Button Content="_Refresh discovery" Command="{Binding RefreshCommand}" Style="{StaticResource Button.Primary}" />
+      <Button Content="_Add folder…" Command="{Binding AddFolderCommand}" ToolTip="Add a game directory, modpack instance or portable installation that was not found automatically." />
+      <Button Content="Re_move folder" Command="{Binding RemoveFolderCommand}" ToolTip="Only folders you added yourself can be removed. Nothing is deleted from disk." />
+      <Button Content="_Open in Explorer" Command="{Binding OpenFolderCommand}" />
+    </StackPanel>
+
+    <TextBlock Grid.Row="1" Text="{Binding ScopeExplanation, Mode=OneWay}" Style="{StaticResource Text.Muted}" Margin="{StaticResource Space.Gap}" />
+
+    <Grid Grid.Row="2">
+      <DataGrid ItemsSource="{Binding Items}" SelectedItem="{Binding Selected, Mode=TwoWay}" AutomationProperties.Name="Discovered installations">
+        <DataGrid.Columns>
+          <DataGridTemplateColumn Header="Scan" SortMemberPath="IsEnabled" Width="Auto">
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate>
+                <CheckBox IsChecked="{Binding IsEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Center" Margin="0"
+                          AutomationProperties.Name="{Binding Name, Mode=OneWay, StringFormat='Include {0} in scans'}" />
+              </DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
+          <DataGridTextColumn Header="Name" Binding="{Binding Name, Mode=OneWay}" Width="2*" />
+          <DataGridTextColumn Header="Launcher" Binding="{Binding Launcher, Mode=OneWay}" Width="Auto" />
+          <DataGridTextColumn Header="Mod loader" Binding="{Binding Loaders, Mode=OneWay}" Width="Auto" />
+          <DataGridTextColumn Header="Location" Binding="{Binding RootPath, Mode=OneWay}" Width="3*" />
+          <DataGridTextColumn Header="Found via" Binding="{Binding DiscoveredBy, Mode=OneWay}" Width="*" />
+          <DataGridTextColumn Header="Last inspected" Binding="{Binding LastInspected, Mode=OneWay}" Width="Auto" />
+        </DataGrid.Columns>
+      </DataGrid>
+      <TextBlock Text="No Minecraft installation was found in the default locations. Use 'Add folder…' to add your game folder."
+                 Style="{StaticResource Text.Muted}" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="24"
+                 Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}" />
+    </Grid>
+
+    <Grid Grid.Row="3" Margin="0,12,0,0">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
+      <Expander Grid.Column="0" Header="Selected installation details" IsExpanded="True" Margin="0,0,12,0">
+        <StackPanel Margin="8">
+          <TextBlock Text="{Binding Selected.Name, Mode=OneWay}" Style="{StaticResource Text.Label}" />
+          <TextBlock Text="{Binding Selected.RootPath, Mode=OneWay}" Style="{StaticResource Text.Mono}" />
+          <TextBlock Text="{Binding Selected.Notes, Mode=OneWay}" Style="{StaticResource Text.Muted}" Margin="0,6,0,0" />
+        </StackPanel>
+      </Expander>
+      <Expander Grid.Column="1" Header="Discovery notes and locations checked">
+        <StackPanel Margin="8">
+          <ItemsControl ItemsSource="{Binding Notes}" Focusable="False">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <TextBlock Text="{Binding Mode=OneWay}" Style="{StaticResource Text.Body}" Margin="{StaticResource Space.GapSmall}" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <TextBlock Text="Locations checked:" Style="{StaticResource Text.Label}" />
+          <ItemsControl ItemsSource="{Binding LocationsChecked}" Focusable="False">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <TextBlock Text="{Binding Mode=OneWay}" Style="{StaticResource Text.Small}" FontFamily="{StaticResource Font.Mono}" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Expander>
+    </Grid>
+  </Grid>
+</UserControl>

@@ -1,0 +1,104 @@
+<UserControl x:Class="CleanerPro.App.Views.ScannerView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+    <StackPanel Margin="{StaticResource Space.Page}">
+
+      <Border Style="{StaticResource Card}">
+        <StackPanel>
+          <TextBlock Text="1. Choose the scan type" Style="{StaticResource Text.Subtitle}" />
+          <StackPanel Orientation="Horizontal" IsEnabled="{Binding IsRunning, Converter={StaticResource InverseBool}}">
+            <RadioButton Content="_Quick Scan" GroupName="Mode" IsChecked="{Binding IsQuick, Mode=TwoWay}" />
+            <RadioButton Content="F_ull Minecraft Scan" GroupName="Mode" IsChecked="{Binding IsFull, Mode=TwoWay}" />
+            <RadioButton Content="C_ustom Scan" GroupName="Mode" IsChecked="{Binding IsCustom, Mode=TwoWay}" />
+          </StackPanel>
+          <TextBlock Text="{Binding ModeExplanation, Mode=OneWay}" Style="{StaticResource Text.Muted}" Margin="0,6,0,0" />
+
+          <StackPanel Margin="0,12,0,0" Visibility="{Binding IsCustom, Converter={StaticResource BoolToVisibility}}">
+            <TextBlock Text="Folders for the custom scan" Style="{StaticResource Text.Label}" />
+            <ListBox ItemsSource="{Binding CustomFolders}" SelectedItem="{Binding SelectedCustomFolder, Mode=TwoWay}" MinHeight="60" MaxHeight="140"
+                     FontFamily="{StaticResource Font.Mono}" AutomationProperties.Name="Custom scan folders" />
+            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+              <Button Content="Add _folder…" Command="{Binding AddCustomFolderCommand}" />
+              <Button Content="_Remove folder" Command="{Binding RemoveCustomFolderCommand}" />
+            </StackPanel>
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <Border Style="{StaticResource Card}">
+        <StackPanel>
+          <DockPanel>
+            <Button DockPanel.Dock="Right" Content="Re_fresh scope" Command="{Binding RefreshScopeCommand}" Margin="0" />
+            <TextBlock Text="2. Review the scope" Style="{StaticResource Text.Subtitle}" />
+          </DockPanel>
+          <TextBlock Text="{Binding ScopeSummary, Mode=OneWay}" Style="{StaticResource Text.Body}" Margin="{StaticResource Space.GapSmall}" />
+          <DataGrid ItemsSource="{Binding ScopeRoots}" MaxHeight="260" AutomationProperties.Name="Scan scope">
+            <DataGrid.Columns>
+              <DataGridTextColumn Header="Location" Binding="{Binding Path, Mode=OneWay}" Width="3*" />
+              <DataGridTextColumn Header="Type" Binding="{Binding Kind, Mode=OneWay}" Width="Auto" />
+              <DataGridTextColumn Header="Depth" Binding="{Binding Depth, Mode=OneWay}" Width="Auto" />
+              <DataGridTextColumn Header="Why it is included" Binding="{Binding Reason, Mode=OneWay}" Width="3*" />
+            </DataGrid.Columns>
+          </DataGrid>
+          <Expander Header="Excluded locations" Margin="0,8,0,0">
+            <ItemsControl ItemsSource="{Binding ExcludedPaths}" Margin="8" Focusable="False">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <TextBlock Text="{Binding Mode=OneWay}" Style="{StaticResource Text.Small}" FontFamily="{StaticResource Font.Mono}" />
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </Expander>
+        </StackPanel>
+      </Border>
+
+      <Border Style="{StaticResource Card}">
+        <StackPanel>
+          <TextBlock Text="3. Scan" Style="{StaticResource Text.Subtitle}" />
+          <StackPanel Orientation="Horizontal" Margin="{StaticResource Space.Gap}">
+            <Button Content="_Start scan" Style="{StaticResource Button.Primary}" Command="{Binding StartCommand}" MinWidth="120" />
+            <Button Content="_Pause" Command="{Binding PauseCommand}" />
+            <Button Content="R_esume" Command="{Binding ResumeCommand}" />
+            <Button Content="_Cancel" Command="{Binding CancelCommand}" />
+            <Button Content="Run detection _self-test…" Command="{Binding SelfTestCommand}"
+                    ToolTip="Creates a harmless text file and scans it to confirm detection works. Safe to quarantine and restore." />
+          </StackPanel>
+
+          <TextBlock Style="{StaticResource Text.Body}" FontWeight="SemiBold" Text="{Binding StageText, Mode=OneWay}" AutomationProperties.LiveSetting="Polite" />
+          <ProgressBar Margin="0,6,0,6" Value="{Binding ProgressPercent, Mode=OneWay}" Maximum="100" IsIndeterminate="{Binding IsIndeterminate, Mode=OneWay}"
+                       AutomationProperties.Name="Scan progress" />
+          <UniformGrid Columns="4">
+            <StackPanel>
+              <TextBlock Text="Files found" Style="{StaticResource Text.Muted}" />
+              <TextBlock Text="{Binding FilesDiscovered, Mode=OneWay, StringFormat=N0}" Style="{StaticResource Text.Subtitle}" />
+            </StackPanel>
+            <StackPanel>
+              <TextBlock Text="Inspected" Style="{StaticResource Text.Muted}" />
+              <TextBlock Text="{Binding FilesInspected, Mode=OneWay, StringFormat=N0}" Style="{StaticResource Text.Subtitle}" />
+            </StackPanel>
+            <StackPanel>
+              <TextBlock Text="Skipped" Style="{StaticResource Text.Muted}" />
+              <TextBlock Text="{Binding FilesSkipped, Mode=OneWay, StringFormat=N0}" Style="{StaticResource Text.Subtitle}" />
+            </StackPanel>
+            <StackPanel>
+              <TextBlock Text="Flagged" Style="{StaticResource Text.Muted}" />
+              <TextBlock Text="{Binding FindingsCount, Mode=OneWay, StringFormat=N0}" Style="{StaticResource Text.Subtitle}" />
+            </StackPanel>
+          </UniformGrid>
+          <TextBlock Text="{Binding CurrentPath, Mode=OneWay}" Style="{StaticResource Text.Small}" FontFamily="{StaticResource Font.Mono}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+          <TextBlock Text="The percentage is shown only once all files have been found; until then the counts above are exact." Style="{StaticResource Text.Small}" Margin="0,4,0,0" />
+
+          <Border Style="{StaticResource Banner}" Margin="0,12,0,0" Visibility="{Binding ResultSummary, Converter={StaticResource HasValueToVisibility}}">
+            <DockPanel>
+              <Button DockPanel.Dock="Right" Content="View findings" Command="{Binding ViewFindingsCommand}" Margin="8,0,0,0" />
+              <TextBlock Text="{Binding ResultSummary, Mode=OneWay}" Style="{StaticResource Text.Banner}" VerticalAlignment="Center" />
+            </DockPanel>
+          </Border>
+        </StackPanel>
+      </Border>
+
+      <TextBlock Text="{Binding ResourceNotice, Mode=OneWay}" Style="{StaticResource Text.Small}" />
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

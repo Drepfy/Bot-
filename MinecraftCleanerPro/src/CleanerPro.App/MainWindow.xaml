@@ -1,0 +1,80 @@
+<Window x:Class="CleanerPro.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:CleanerPro.App.ViewModels"
+        xmlns:views="clr-namespace:CleanerPro.App.Views"
+        Title="{Binding WindowTitle, Mode=OneWay}"
+        Width="1280" Height="820" MinWidth="900" MinHeight="600"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource Brush.Background}"
+        Foreground="{DynamicResource Brush.Text}"
+        FontFamily="{StaticResource Font.Body}"
+        FontSize="{DynamicResource FontSize.Body}"
+        UseLayoutRounding="True">
+  <Window.Resources>
+    <DataTemplate DataType="{x:Type vm:DashboardViewModel}"><views:DashboardView /></DataTemplate>
+    <DataTemplate DataType="{x:Type vm:InstallationsViewModel}"><views:InstallationsView /></DataTemplate>
+    <DataTemplate DataType="{x:Type vm:ScannerViewModel}"><views:ScannerView /></DataTemplate>
+    <DataTemplate DataType="{x:Type vm:FindingsViewModel}"><views:FindingsView /></DataTemplate>
+    <DataTemplate DataType="{x:Type vm:QuarantineViewModel}"><views:QuarantineView /></DataTemplate>
+    <DataTemplate DataType="{x:Type vm:HistoryViewModel}"><views:HistoryView /></DataTemplate>
+    <DataTemplate DataType="{x:Type vm:ConfigurationViewModel}"><views:ConfigurationView /></DataTemplate>
+    <DataTemplate DataType="{x:Type vm:PrivacyViewModel}"><views:PrivacyView /></DataTemplate>
+    <DataTemplate DataType="{x:Type vm:AboutViewModel}"><views:AboutView /></DataTemplate>
+  </Window.Resources>
+
+  <DockPanel>
+    <!-- Status bar -->
+    <Border DockPanel.Dock="Bottom" Background="{DynamicResource Brush.Nav}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,1,0,0" Padding="12,6">
+      <DockPanel>
+        <TextBlock DockPanel.Dock="Right" Style="{StaticResource Text.Small}" Margin="16,0,0,0" Text="{Binding NetworkStatus, Mode=OneWay}" />
+        <TextBlock DockPanel.Dock="Right" Style="{StaticResource Text.Small}" Margin="16,0,0,0" Text="{Binding RulesStatus, Mode=OneWay}" />
+        <TextBlock Style="{StaticResource Text.Small}" Text="{Binding State.StatusMessage, Mode=OneWay}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"
+                   AutomationProperties.LiveSetting="Polite" AutomationProperties.Name="Status" />
+      </DockPanel>
+    </Border>
+
+    <!-- Navigation -->
+    <Border DockPanel.Dock="Left" Width="236" Background="{DynamicResource Brush.Nav}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,0,1,0">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Top" Margin="18,18,18,14">
+          <TextBlock Text="Minecraft Cleaner Pro" Style="{StaticResource Text.Subtitle}" Margin="0" />
+          <TextBlock Text="Ultimate" Style="{StaticResource Text.Small}" />
+        </StackPanel>
+        <Border DockPanel.Dock="Bottom" Margin="12" Padding="10" CornerRadius="4" Background="{DynamicResource Brush.Surface}"
+                Visibility="{Binding State.IsScanning, Converter={StaticResource BoolToVisibility}}">
+          <StackPanel>
+            <TextBlock Text="Scan in progress" Style="{StaticResource Text.Label}" Margin="0" />
+            <TextBlock Style="{StaticResource Text.Small}" Text="{Binding Scanner.StageText, Mode=OneWay}" />
+          </StackPanel>
+        </Border>
+        <ListBox ItemsSource="{Binding Pages}" SelectedItem="{Binding SelectedPage, Mode=TwoWay}"
+                 Background="Transparent" BorderThickness="0" ItemContainerStyle="{StaticResource NavItem}"
+                 AutomationProperties.Name="Navigation" KeyboardNavigation.TabNavigation="Once"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+          <ListBox.ItemTemplate>
+            <DataTemplate>
+              <StackPanel Orientation="Horizontal" AutomationProperties.Name="{Binding Title, Mode=OneWay}">
+                <TextBlock Text="{Binding Icon, Mode=OneWay}" Style="{StaticResource Text.Icon}" Margin="0,0,12,0" />
+                <TextBlock Text="{Binding Title, Mode=OneWay}" VerticalAlignment="Center" />
+              </StackPanel>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </DockPanel>
+    </Border>
+
+    <!-- Page -->
+    <Grid>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="*" />
+      </Grid.RowDefinitions>
+      <StackPanel Grid.Row="0" Margin="24,18,24,8">
+        <TextBlock Text="{Binding SelectedPage.Title, Mode=OneWay}" Style="{StaticResource Text.Title}" AutomationProperties.HeadingLevel="Level1" />
+        <TextBlock Text="{Binding SelectedPage.Description, Mode=OneWay}" Style="{StaticResource Text.Muted}" MaxWidth="980" HorizontalAlignment="Left" />
+      </StackPanel>
+      <ContentControl Grid.Row="1" Content="{Binding SelectedPage}" Focusable="False" />
+    </Grid>
+  </DockPanel>
+</Window>

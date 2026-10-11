@@ -1,0 +1,199 @@
+<UserControl x:Class="CleanerPro.App.Views.FindingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Grid Margin="{StaticResource Space.Page}">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <StackPanel Grid.Row="0" Margin="{StaticResource Space.GapSmall}">
+      <TextBlock Text="{Binding SessionHeader, Mode=OneWay}" Style="{StaticResource Text.Label}" Margin="0" />
+      <TextBlock Text="{Binding CountsText, Mode=OneWay}" Style="{StaticResource Text.Muted}" />
+    </StackPanel>
+
+    <WrapPanel Grid.Row="1" Margin="{StaticResource Space.Gap}">
+      <Button Content="_Quarantine selected…" Style="{StaticResource Button.Primary}" Command="{Binding QuarantineSelectedCommand}"
+              ToolTip="Moves the ticked items (or the highlighted item) into quarantine after confirmation. Reversible." />
+      <Button Content="_Verify cleanup" Command="{Binding VerifyCommand}" ToolTip="Rescans the folders of the original findings and compares the results by path and hash." />
+      <Button Content="E_xport report…" Command="{Binding ExportReportCommand}" />
+      <Button Content="Tick _all" Command="{Binding SelectAllCommand}" ToolTip="Ticks every visible item that can be quarantined." />
+      <Button Content="Untick all" Command="{Binding ClearSelectionCommand}" />
+    </WrapPanel>
+
+    <DockPanel Grid.Row="2" Margin="{StaticResource Space.Gap}">
+      <ComboBox DockPanel.Dock="Right" ItemsSource="{Binding ClassificationFilters}" SelectedItem="{Binding ClassificationFilter, Mode=TwoWay}" Margin="12,0,0,0"
+                AutomationProperties.Name="Filter by classification" />
+      <TextBlock DockPanel.Dock="Left" Text="Search:" Style="{StaticResource Text.Body}" VerticalAlignment="Center" Margin="0,0,8,0" />
+      <TextBox Text="{Binding SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Search findings"
+               ToolTip="Search by path, family, rule id or SHA-256." />
+    </DockPanel>
+
+    <Grid Grid.Row="3">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="3*" MinWidth="320" />
+        <ColumnDefinition Width="Auto" />
+        <ColumnDefinition Width="2*" MinWidth="280" />
+      </Grid.ColumnDefinitions>
+
+      <Grid Grid.Column="0">
+        <DataGrid ItemsSource="{Binding View}" SelectedItem="{Binding Selected, Mode=TwoWay}" AutomationProperties.Name="Findings">
+          <DataGrid.Columns>
+            <DataGridTemplateColumn Header="" Width="Auto" CanUserSort="False">
+              <DataGridTemplateColumn.CellTemplate>
+                <DataTemplate>
+                  <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding CanQuarantine, Mode=OneWay}" Margin="0"
+                            AutomationProperties.Name="{Binding Name, Mode=OneWay, StringFormat='Select {0}'}" />
+                </DataTemplate>
+              </DataGridTemplateColumn.CellTemplate>
+            </DataGridTemplateColumn>
+            <DataGridTemplateColumn Header="Classification" SortMemberPath="ClassificationRank" Width="Auto">
+              <DataGridTemplateColumn.CellTemplate>
+                <DataTemplate>
+                  <TextBlock Text="{Binding ClassificationText, Mode=OneWay}" FontWeight="SemiBold"
+                             Foreground="{Binding Classification, Converter={StaticResource ClassificationBrush}}" />
+                </DataTemplate>
+              </DataGridTemplateColumn.CellTemplate>
+            </DataGridTemplateColumn>
+            <DataGridTextColumn Header="Family" Binding="{Binding Family, Mode=OneWay}" Width="*" />
+            <DataGridTextColumn Header="File" Binding="{Binding Name, Mode=OneWay}" Width="*" />
+            <DataGridTextColumn Header="Severity" Binding="{Binding Severity, Mode=OneWay}" Width="Auto" />
+            <DataGridTextColumn Header="Confidence" Binding="{Binding Confidence, Mode=OneWay}" Width="Auto" />
+            <DataGridTextColumn Header="Status" Binding="{Binding StatusText, Mode=OneWay}" Width="*" />
+            <DataGridTextColumn Header="Installation" Binding="{Binding Installation, Mode=OneWay}" Width="*" />
+          </DataGrid.Columns>
+        </DataGrid>
+        <TextBlock Text="{Binding EmptyMessage, Mode=OneWay}" Style="{StaticResource Text.Muted}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                   Margin="24" TextAlignment="Center" Visibility="{Binding HasFindings, Converter={StaticResource BoolToVisibilityInverse}}" />
+      </Grid>
+
+      <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Center" VerticalAlignment="Stretch" Background="Transparent" Focusable="False" />
+
+      <Border Grid.Column="2" Style="{StaticResource Card}" Margin="0" Padding="0">
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+          <StackPanel Margin="14">
+            <TextBlock Text="Select a finding to see its evidence." Style="{StaticResource Text.Muted}"
+                       Visibility="{Binding HasSelection, Converter={StaticResource BoolToVisibilityInverse}}" />
+            <StackPanel Visibility="{Binding HasSelection, Converter={StaticResource BoolToVisibility}}">
+              <TextBlock Text="{Binding Selected.ClassificationText, Mode=OneWay}" Style="{StaticResource Text.Subtitle}" Margin="0"
+                         Foreground="{Binding Selected.Classification, Converter={StaticResource ClassificationBrush}}" />
+              <TextBlock Text="{Binding Selected.Path, Mode=OneWay}" Style="{StaticResource Text.Mono}" Margin="{StaticResource Space.GapSmall}" />
+              <StackPanel Orientation="Horizontal" Margin="{StaticResource Space.GapSmall}">
+                <Button Content="Show in _Explorer" Command="{Binding OpenLocationCommand}" />
+                <Button Content="Copy SHA-_256" Command="{Binding CopyHashCommand}" />
+                <Button Content="_Trust this file…" Command="{Binding TrustCommand}" Margin="0"
+                        ToolTip="Adds this exact file (hash and path) to your trusted exclusions. Not available for known matches." />
+              </StackPanel>
+
+              <TextBlock Text="Why" Style="{StaticResource Text.Label}" />
+              <TextBlock Text="{Binding Selected.Rationale, Mode=OneWay}" Style="{StaticResource Text.Body}" />
+
+              <TextBlock Text="Assessment" Style="{StaticResource Text.Label}" />
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                  <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
+                </Grid.RowDefinitions>
+                <TextBlock Grid.Row="0" Text="Confidence" Style="{StaticResource Text.Muted}" Margin="0,0,12,2" />
+                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding Selected.Confidence, Mode=OneWay}" Style="{StaticResource Text.Body}" />
+                <TextBlock Grid.Row="1" Text="Severity" Style="{StaticResource Text.Muted}" Margin="0,0,12,2" />
+                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Selected.Severity, Mode=OneWay}" Style="{StaticResource Text.Body}" />
+                <TextBlock Grid.Row="2" Text="Reputation" Style="{StaticResource Text.Muted}" Margin="0,0,12,2" />
+                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Selected.Reputation, Mode=OneWay}" Style="{StaticResource Text.Body}" />
+                <TextBlock Grid.Row="3" Text="Recommended" Style="{StaticResource Text.Muted}" Margin="0,0,12,2" />
+                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding Selected.RecommendedActionText, Mode=OneWay}" Style="{StaticResource Text.Body}" />
+                <TextBlock Grid.Row="4" Text="Cleanup status" Style="{StaticResource Text.Muted}" Margin="0,0,12,2" />
+                <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding Selected.StatusText, Mode=OneWay}" Style="{StaticResource Text.Body}" />
+                <TextBlock Grid.Row="5" Text="Mod identity" Style="{StaticResource Text.Muted}" Margin="0,0,12,2" />
+                <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding Selected.Identity, Mode=OneWay}" Style="{StaticResource Text.Body}" />
+                <TextBlock Grid.Row="6" Text="Size" Style="{StaticResource Text.Muted}" Margin="0,0,12,2" />
+                <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding Selected.Size, Mode=OneWay}" Style="{StaticResource Text.Body}" />
+                <TextBlock Grid.Row="7" Text="SHA-256" Style="{StaticResource Text.Muted}" Margin="0,0,12,2" />
+                <TextBox Grid.Row="7" Grid.Column="1" Text="{Binding Selected.Sha256, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Padding="0" Background="Transparent"
+                         FontFamily="{StaticResource Font.Mono}" TextWrapping="Wrap" AutomationProperties.Name="SHA-256" />
+                <TextBlock Grid.Row="8" Text="SHA-1" Style="{StaticResource Text.Muted}" Margin="0,0,12,2" />
+                <TextBox Grid.Row="8" Grid.Column="1" Text="{Binding Selected.Sha1, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Padding="0" Background="Transparent"
+                         FontFamily="{StaticResource Font.Mono}" TextWrapping="Wrap" AutomationProperties.Name="SHA-1" />
+              </Grid>
+
+              <TextBlock Text="Evidence" Style="{StaticResource Text.Label}" />
+              <ItemsControl ItemsSource="{Binding Selected.Evidence}" Focusable="False">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Border BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,0,0,1" Padding="0,4">
+                      <StackPanel>
+                        <TextBlock Style="{StaticResource Text.Body}">
+                          <Run Text="{Binding Strength, Mode=OneWay}" FontWeight="SemiBold" /><Run Text=" · " /><Run Text="{Binding Kind, Mode=OneWay}" /><Run Text=" · " /><Run Text="{Binding RuleId, Mode=OneWay}" />
+                        </TextBlock>
+                        <TextBlock Text="{Binding Description, Mode=OneWay}" Style="{StaticResource Text.Body}" />
+                        <TextBlock Text="{Binding Location, Mode=OneWay}" Style="{StaticResource Text.Small}" FontFamily="{StaticResource Font.Mono}"
+                                   Visibility="{Binding Location, Converter={StaticResource HasValueToVisibility}}" />
+                      </StackPanel>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+
+              <TextBlock Text="Rules and sources" Style="{StaticResource Text.Label}" />
+              <ItemsControl ItemsSource="{Binding Selected.RuleMatches}" Focusable="False">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <StackPanel Margin="{StaticResource Space.Gap}">
+                      <TextBlock Style="{StaticResource Text.Body}" FontWeight="SemiBold">
+                        <Run Text="{Binding RuleId, Mode=OneWay}" /><Run Text=" v" /><Run Text="{Binding RuleVersion, Mode=OneWay}" /><Run Text=" — " /><Run Text="{Binding Family, Mode=OneWay}" /><Run Text=" (" /><Run Text="{Binding Category, Mode=OneWay}" /><Run Text=")" />
+                      </TextBlock>
+                      <TextBlock Style="{StaticResource Text.Small}">
+                        <Run Text="Rule result: " /><Run Text="{Binding Classification, Mode=OneWay, Converter={StaticResource DisplayText}}" /><Run Text=" · potential severity " /><Run Text="{Binding Severity, Mode=OneWay}" /><Run Text=" · verified on " /><Run Text="{Binding VerifiedOn, Mode=OneWay}" />
+                      </TextBlock>
+                      <TextBlock Text="{Binding FalsePositiveNotes, Mode=OneWay, StringFormat='False positives: {0}'}" Style="{StaticResource Text.Small}"
+                                 Visibility="{Binding FalsePositiveNotes, Converter={StaticResource HasValueToVisibility}}" />
+                      <ItemsControl ItemsSource="{Binding Sources}" Focusable="False">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate>
+                            <TextBlock Style="{StaticResource Text.Small}" TextWrapping="Wrap">
+                              <Run Text="• " /><Run Text="{Binding Title, Mode=OneWay}" /><Run Text=": " /><Run Text="{Binding Url, Mode=OneWay}" FontFamily="{StaticResource Font.Mono}" />
+                            </TextBlock>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </StackPanel>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+
+              <TextBlock Text="Limitations" Style="{StaticResource Text.Label}" />
+              <ItemsControl ItemsSource="{Binding Selected.Limitations}" Focusable="False">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <TextBlock Text="{Binding Mode=OneWay}" Style="{StaticResource Text.Muted}" Margin="{StaticResource Space.GapSmall}" />
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </StackPanel>
+        </ScrollViewer>
+      </Border>
+    </Grid>
+
+    <Expander Grid.Row="4" Header="Post-cleanup verification" Margin="0,12,0,0"
+              Visibility="{Binding VerificationSummary, Converter={StaticResource HasValueToVisibility}}">
+      <StackPanel Margin="8">
+        <TextBlock Text="{Binding VerificationSummary, Mode=OneWay}" Style="{StaticResource Text.Body}" Margin="{StaticResource Space.GapSmall}" />
+        <DataGrid ItemsSource="{Binding VerificationItems}" MaxHeight="220" AutomationProperties.Name="Verification results">
+          <DataGrid.Columns>
+            <DataGridTextColumn Header="Outcome" Binding="{Binding Outcome, Mode=OneWay}" Width="Auto" />
+            <DataGridTextColumn Header="Family" Binding="{Binding Family, Mode=OneWay}" Width="*" />
+            <DataGridTextColumn Header="Item" Binding="{Binding Path, Mode=OneWay}" Width="2*" />
+            <DataGridTextColumn Header="Details" Binding="{Binding Detail, Mode=OneWay}" Width="3*" />
+          </DataGrid.Columns>
+        </DataGrid>
+      </StackPanel>
+    </Expander>
+  </Grid>
+</UserControl>

@@ -1,0 +1,50 @@
+name: Minecraft Cleaner Pro
+
+on:
+  push:
+    paths:
+      - "MinecraftCleanerPro/**"
+      - ".github/workflows/minecraft-cleaner-pro.yml"
+  pull_request:
+    paths:
+      - "MinecraftCleanerPro/**"
+      - ".github/workflows/minecraft-cleaner-pro.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: Build, test and verify on Windows
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: MinecraftCleanerPro
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: MinecraftCleanerPro/global.json
+
+      - name: Build, test, publish, self-test and UI smoke test
+        run: ./scripts/build.ps1 -SmokeUi
+
+      - name: Upload executable and verification results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MinecraftCleanerPro-win-x64
+          path: |
+            MinecraftCleanerPro/artifacts/publish/MinecraftCleanerPro.exe
+            MinecraftCleanerPro/artifacts/publish/MinecraftCleanerPro.exe.sha256
+            MinecraftCleanerPro/artifacts/selftest.json
+            MinecraftCleanerPro/artifacts/smoke-ui.log
+            MinecraftCleanerPro/artifacts/TestResults/**
+          if-no-files-found: warn

@@ -1,0 +1,58 @@
+<UserControl x:Class="CleanerPro.App.Views.HistoryView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Grid Margin="{StaticResource Space.Page}">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="2*" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+    </Grid.RowDefinitions>
+
+    <WrapPanel Grid.Row="0" Margin="{StaticResource Space.Gap}">
+      <Button Content="_Open in Findings" Style="{StaticResource Button.Primary}" Command="{Binding OpenCommand}" />
+      <Button Content="E_xport report…" Command="{Binding ExportCommand}" />
+      <Button Content="_Delete record…" Command="{Binding DeleteCommand}" />
+      <Button Content="Delete _all history…" Style="{StaticResource Button.Danger}" Command="{Binding DeleteAllCommand}" />
+      <Button Content="Re_fresh" Command="{Binding RefreshCommand}" />
+      <Button Content="Open _reports folder" Command="{Binding OpenReportsFolderCommand}" />
+    </WrapPanel>
+
+    <DockPanel Grid.Row="1" Margin="{StaticResource Space.Gap}">
+      <TextBlock DockPanel.Dock="Left" Text="Search:" Style="{StaticResource Text.Body}" VerticalAlignment="Center" Margin="0,0,8,0" />
+      <TextBox Text="{Binding SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Search history" />
+    </DockPanel>
+
+    <Grid Grid.Row="2">
+      <DataGrid ItemsSource="{Binding SessionsView}" SelectedItem="{Binding Selected, Mode=TwoWay}" AutomationProperties.Name="Scan history">
+        <DataGrid.Columns>
+          <DataGridTextColumn Header="Started" Binding="{Binding StartedAtUtc, Mode=OneWay, Converter={StaticResource LocalTime}}" SortMemberPath="StartedAtUtc" Width="Auto" />
+          <DataGridTextColumn Header="Type" Binding="{Binding Mode, Mode=OneWay}" Width="Auto" />
+          <DataGridTextColumn Header="Result" Binding="{Binding State, Mode=OneWay}" Width="Auto" />
+          <DataGridTextColumn Header="Inspected" Binding="{Binding Statistics.FilesInspected, Mode=OneWay, StringFormat=N0}" Width="Auto" />
+          <DataGridTextColumn Header="Flagged" Binding="{Binding Statistics.UniqueFilesFlagged, Mode=OneWay}" Width="Auto" />
+          <DataGridTextColumn Header="Known" Binding="{Binding KnownMatches, Mode=OneWay}" Width="Auto" />
+          <DataGridTextColumn Header="High" Binding="{Binding HighConfidence, Mode=OneWay}" Width="Auto" />
+          <DataGridTextColumn Header="Review" Binding="{Binding NeedsReview, Mode=OneWay}" Width="Auto" />
+          <DataGridTextColumn Header="Skipped" Binding="{Binding Statistics.FilesSkipped, Mode=OneWay}" Width="Auto" />
+          <DataGridTextColumn Header="Rules" Binding="{Binding RulesVersion, Mode=OneWay}" Width="Auto" />
+          <DataGridTextColumn Header="Id" Binding="{Binding Id, Mode=OneWay}" Width="*" />
+        </DataGrid.Columns>
+      </DataGrid>
+      <TextBlock Text="No scans have been recorded yet." Style="{StaticResource Text.Muted}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                 Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}" />
+    </Grid>
+
+    <TextBlock Grid.Row="3" Text="Cleanup operations (audit log)" Style="{StaticResource Text.Subtitle}" Margin="0,16,0,8" />
+    <DataGrid Grid.Row="4" ItemsSource="{Binding OperationsView}" AutomationProperties.Name="Cleanup operations">
+      <DataGrid.Columns>
+        <DataGridTextColumn Header="Time" Binding="{Binding TimestampUtc, Mode=OneWay, Converter={StaticResource LocalTime}}" SortMemberPath="TimestampUtc" Width="Auto" />
+        <DataGridTextColumn Header="Operation" Binding="{Binding Type, Mode=OneWay}" Width="Auto" />
+        <DataGridCheckBoxColumn Header="Succeeded" Binding="{Binding Succeeded, Mode=OneWay}" Width="Auto" />
+        <DataGridTextColumn Header="Item" Binding="{Binding Path, Mode=OneWay}" Width="2*" />
+        <DataGridTextColumn Header="Details" Binding="{Binding Message, Mode=OneWay}" Width="3*" />
+      </DataGrid.Columns>
+    </DataGrid>
+  </Grid>
+</UserControl>

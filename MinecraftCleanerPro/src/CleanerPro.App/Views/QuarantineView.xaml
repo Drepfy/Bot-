@@ -1,0 +1,54 @@
+<UserControl x:Class="CleanerPro.App.Views.QuarantineView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Grid Margin="{StaticResource Space.Page}">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <WrapPanel Grid.Row="0" Margin="{StaticResource Space.Gap}">
+      <Button Content="_Restore selected…" Style="{StaticResource Button.Primary}" Command="{Binding RestoreCommand}"
+              ToolTip="Verifies the quarantined copy and puts it back. Existing files are never overwritten." />
+      <Button Content="_Verify integrity" Command="{Binding VerifyCommand}" ToolTip="Recalculates the SHA-256 of every quarantined copy." />
+      <Button Content="_Delete permanently…" Style="{StaticResource Button.Danger}" Command="{Binding DeleteCommand}"
+              ToolTip="Deletes the ticked (or highlighted) quarantined copies forever after you confirm the exact list." />
+      <Button Content="Re_fresh" Command="{Binding RefreshCommand}" />
+      <Button Content="_Open quarantine folder" Command="{Binding OpenFolderCommand}" />
+    </WrapPanel>
+
+    <Grid Grid.Row="1">
+      <DataGrid ItemsSource="{Binding Items}" SelectedItem="{Binding Selected, Mode=TwoWay}" AutomationProperties.Name="Quarantined items">
+        <DataGrid.Columns>
+          <DataGridTemplateColumn Header="" Width="Auto" CanUserSort="False">
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate>
+                <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0"
+                          AutomationProperties.Name="{Binding Name, Mode=OneWay, StringFormat='Select {0}'}" />
+              </DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
+          <DataGridTextColumn Header="File" Binding="{Binding Name, Mode=OneWay}" Width="*" />
+          <DataGridTextColumn Header="Original location" Binding="{Binding OriginalPath, Mode=OneWay}" Width="3*" />
+          <DataGridTextColumn Header="Quarantined" Binding="{Binding QuarantinedAt, Mode=OneWay, StringFormat=g}" Width="Auto" />
+          <DataGridTextColumn Header="Size" Binding="{Binding Size, Mode=OneWay}" Width="Auto" />
+          <DataGridTextColumn Header="Family" Binding="{Binding Family, Mode=OneWay}" Width="*" />
+          <DataGridTextColumn Header="Rules" Binding="{Binding Rules, Mode=OneWay}" Width="Auto" />
+          <DataGridTextColumn Header="Integrity" Binding="{Binding Integrity, Mode=OneWay}" Width="Auto" />
+        </DataGrid.Columns>
+      </DataGrid>
+      <TextBlock Text="Quarantine is empty." Style="{StaticResource Text.Muted}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                 Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}" />
+    </Grid>
+
+    <StackPanel Grid.Row="2" Margin="0,12,0,0">
+      <TextBlock Style="{StaticResource Text.Small}">
+        <Run Text="Location: " /><Run Text="{Binding Location, Mode=OneWay}" FontFamily="{StaticResource Font.Mono}" />
+      </TextBlock>
+      <TextBlock Text="{Binding Selected.Sha256, Mode=OneWay, StringFormat='SHA-256 of the selected file: {0}'}" Style="{StaticResource Text.Small}" FontFamily="{StaticResource Font.Mono}" />
+      <TextBlock Style="{StaticResource Text.Small}"
+                 Text="Quarantined files are stored encoded (not encrypted) so they cannot run or be opened by accident. Antivirus software may still remove them; integrity checks will show this." />
+    </StackPanel>
+  </Grid>
+</UserControl>

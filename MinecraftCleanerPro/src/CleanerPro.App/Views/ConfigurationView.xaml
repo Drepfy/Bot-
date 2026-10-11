@@ -1,0 +1,268 @@
+<UserControl x:Class="CleanerPro.App.Views.ConfigurationView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!-- Generated layout: every supported setting of config.json (see docs/CONFIGURATION.md). -->
+  <DockPanel Margin="{StaticResource Space.Page}">
+    <StackPanel DockPanel.Dock="Top">
+      <WrapPanel Margin="{StaticResource Space.Gap}">
+        <Button Content="_Save" Style="{StaticResource Button.Primary}" Command="{Binding SaveCommand}" ToolTip="Validates the settings, backs up the current file and saves." />
+        <Button Content="_Validate" Command="{Binding ValidateCommand}" />
+        <Button Content="_Open configuration file" Command="{Binding OpenFileCommand}" ToolTip="Opens config.json in your default text editor (Notepad if none is set)." />
+        <Button Content="View _effective configuration" Command="{Binding ViewEffectiveCommand}" />
+        <Button Content="E_xport…" Command="{Binding ExportCommand}" />
+        <Button Content="_Reload" Command="{Binding ReloadCommand}" ToolTip="Reads config.json again, for example after editing it in a text editor." />
+        <Button Content="Restore _defaults…" Command="{Binding RestoreDefaultsCommand}" />
+        <Button Content="Open _backups" Command="{Binding OpenBackupsCommand}" />
+      </WrapPanel>
+      <TextBlock Style="{StaticResource Text.Small}">
+        <Run Text="File: " /><Run Text="{Binding FilePath, Mode=OneWay}" FontFamily="{StaticResource Font.Mono}" />
+      </TextBlock>
+      <TextBlock Text="{Binding LoadStatus, Mode=OneWay}" Style="{StaticResource Text.Body}" FontWeight="SemiBold" Margin="0,4,0,8" AutomationProperties.LiveSetting="Polite" />
+      <DataGrid ItemsSource="{Binding Issues}" MaxHeight="200" Margin="{StaticResource Space.Gap}" AutomationProperties.Name="Validation issues"
+                Visibility="{Binding Issues.Count, Converter={StaticResource HasValueToVisibility}}">
+        <DataGrid.Columns>
+          <DataGridTextColumn Header="Severity" Binding="{Binding Severity, Mode=OneWay}" Width="Auto" />
+          <DataGridTextColumn Header="Setting" Binding="{Binding Setting, Mode=OneWay}" Width="*" />
+          <DataGridTextColumn Header="Problem" Binding="{Binding Message, Mode=OneWay}" Width="2*" />
+          <DataGridTextColumn Header="How to fix" Binding="{Binding HowToFix, Mode=OneWay}" Width="2*" />
+        </DataGrid.Columns>
+      </DataGrid>
+    </StackPanel>
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+      <StackPanel>
+      <Expander Header="Scan scope and file inspection" IsExpanded="True">
+        <StackPanel Margin="12,8,12,12">
+        <CheckBox Content="Scan installations found by discovery" IsChecked="{Binding Config.Scan.IncludeDiscoveredInstallations, Mode=TwoWay}" ToolTip="Untick individual installations on the Installations page." />
+        <StackPanel Margin="0,6" ToolTip="Extra folders that are scanned in Quick and Full scans.">
+          <TextBlock Text="Custom directories (one absolute path per line)" Style="{StaticResource Text.Body}" Margin="0,0,0,4" />
+          <TextBox Text="{Binding CustomDirectories, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" AcceptsReturn="True" TextWrapping="NoWrap" MinHeight="64" MaxHeight="160"
+                   VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" VerticalContentAlignment="Top" FontFamily="{StaticResource Font.Mono}" AutomationProperties.Name="Custom directories (one absolute path per line)" />
+        </StackPanel>
+        <StackPanel Margin="0,6">
+          <TextBlock Text="Excluded directories (one absolute path per line)" Style="{StaticResource Text.Body}" Margin="0,0,0,4" />
+          <TextBox Text="{Binding ExcludedDirectories, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" AcceptsReturn="True" TextWrapping="NoWrap" MinHeight="64" MaxHeight="160"
+                   VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" VerticalContentAlignment="Top" FontFamily="{StaticResource Font.Mono}" AutomationProperties.Name="Excluded directories (one absolute path per line)" />
+        </StackPanel>
+        <StackPanel Margin="0,6">
+          <TextBlock Text="Excluded folder names anywhere inside installations (one per line)" Style="{StaticResource Text.Body}" Margin="0,0,0,4" />
+          <TextBox Text="{Binding ExcludedNames, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" AcceptsReturn="True" TextWrapping="NoWrap" MinHeight="64" MaxHeight="160"
+                   VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" VerticalContentAlignment="Top" FontFamily="{StaticResource Font.Mono}" AutomationProperties.Name="Excluded folder names anywhere inside installations (one per line)" />
+        </StackPanel>
+        <DockPanel Margin="0,3" ToolTip="Files with other extensions are counted but not opened.">
+          <TextBlock Text="Inspected file extensions (space separated)" Width="320" Style="{StaticResource Text.Body}" VerticalAlignment="Center" />
+          <TextBox Text="{Binding Extensions, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" Width="520" HorizontalAlignment="Left" AutomationProperties.Name="Inspected file extensions (space separated)" />
+        </DockPanel>
+        <DockPanel Margin="0,3" ToolTip="Larger files are only checked by name and location.">
+          <TextBlock Text="Maximum file size (MB)" Width="320" Style="{StaticResource Text.Body}" VerticalAlignment="Center" />
+          <TextBox Text="{Binding Config.Scan.MaxFileSizeMegabytes, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" Width="140" HorizontalAlignment="Left" AutomationProperties.Name="Maximum file size (MB)" />
+        </DockPanel>
+        <DockPanel Margin="0,3">
+          <TextBlock Text="Maximum folder depth" Width="320" Style="{StaticResource Text.Body}" VerticalAlignment="Center" />
+          <TextBox Text="{Binding Config.Scan.MaxDirectoryDepth, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" Width="140" HorizontalAlignment="Left" AutomationProperties.Name="Maximum folder depth" />
+        </DockPanel>
+        <CheckBox Content="Follow symbolic links and junctions (only into other scan locations)" IsChecked="{Binding Config.Scan.FollowDirectoryLinks, Mode=TwoWay}" />
+        <CheckBox Content="Inspect archives (.jar / .zip) without extracting them" IsChecked="{Binding Config.Scan.InspectArchives, Mode=TwoWay}" />
+        <DockPanel Margin="0,3">
+          <TextBlock Text="Archive: maximum entries" Width="320" Style="{StaticResource Text.Body}" VerticalAlignment="Center" />
+          <TextBox Text="{Binding Config.Scan.ArchiveLimits.MaxEntries, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" Width="140" HorizontalAlignment="Left" AutomationProperties.Name="Archive: maximum entries" />
+        </DockPanel>
+        <DockPanel Margin="0,3">
+          <TextBlock Text="Archive: maximum total uncompressed size (MB)" Width="320" Style="{StaticResource Text.Body}" VerticalAlignment="Center" />
+          <TextBox Text="{Binding Config.Scan.ArchiveLimits.MaxTotalUncompressedMegabytes, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" Width="140" HorizontalAlignment="Left" AutomationProperties.Name="Archive: maximum total uncompressed size (MB)" />
+        </DockPanel>
+        <DockPanel Margin="0,3">
+          <TextBlock Text="Archive: maximum single entry size (MB)" Width="320" Style="{StaticResource Text.Body}" VerticalAlignment="Center" />
+          <TextBox Text="{Binding Config.Scan.ArchiveLimits.MaxEntryUncompressedMegabytes, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" Width="140" HorizontalAlignment="Left" AutomationProperties.Name="Archive: maximum single entry size (MB)" />
+        </DockPanel>
+        <DockPanel Margin="0,3" ToolTip="Entries compressed more than this are treated as possible archive bombs.">
+          <TextBlock Text="Archive: maximum compression ratio" Width="320" Style="{StaticResource Text.Body}" VerticalAlignment="Center" />
+          <TextBox Text="{Binding Config.Scan.ArchiveLimits.MaxCompressionRatio, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" Width="140" HorizontalAlignment="Left" AutomationProperties.Name="Archive: maximum compression ratio" />
+        </DockPanel>
+        <DockPanel Margin="0,3">
+          <TextBlock Text="Archive: maximum nesting depth (jar-in-jar)" Width="320" Style="{StaticResource Text.Body}" VerticalAlignment="Center" />
+          <TextBox Text="{Binding Config.Scan.ArchiveLimits.MaxNestedArchiveDepth, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" Width="140" HorizontalAlignment="Left" AutomationProperties.Name="Archive: maximum nesting depth (jar-in-jar)" />
+        </DockPanel>
+        <DockPanel Margin="0,3">
+          <TextBlock Text="Archive: maximum nested archive size (MB)" Width="320" Style="{StaticResource Text.Body}" VerticalAlignment="Center" />
+          <TextBox Text="{Binding Config.Scan.ArchiveLimits.MaxNestedArchiveMegabytes, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" Width="140" HorizontalAlignment="Left" AutomationProperties.Name="Archive: maximum nested archive size (MB)" />
+        </DockPanel>
+        <CheckBox Content="Inspect Java bytecode statically for documented malware signatures" IsChecked="{Binding Config.Scan.InspectBytecode, Mode=TwoWay}" ToolTip="Class files are parsed, never loaded or executed." />
+        <DockPanel Margin="0,3">
+          <TextBlock Text="Maximum class file size (KB)" Width="320" Style="{StaticResource Text.Body}" VerticalAlignment="Center" />
+          <TextBox Text="{Binding Config.Scan.MaxClassFileKilobytes, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" Width="140" HorizontalAlignment="Left" AutomationProperties.Name="Maximum class file size (KB)" />
+        </DockPanel>
+        <CheckBox Content="Check documented malware persistence locations outside Minecraft (read-only)" IsChecked="{Binding Config.Scan.InspectSystemArtifacts, Mode=TwoWay}" />
+        <CheckBox Content="Read per-user startup entries (read-only)" IsChecked="{Binding Config.Scan.InspectStartupEntries, Mode=TwoWay}" />
+        <CheckBox Content="List running processes started from flagged locations (read-only)" IsChecked="{Binding Config.Scan.InspectRunningProcesses, Mode=TwoWay}" />
+        </StackPanel>
+      </Expander>
+      <Expander Header="Detection" IsExpanded="False">
+        <StackPanel Margin="12,8,12,12">
+        <TextBlock Text="Enabled detection categories" Style="{StaticResource Text.Body}" Margin="0,0,0,4" />
+        <ItemsControl ItemsSource="{Binding Categories}" Focusable="False">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <UniformGrid Columns="3" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <CheckBox Content="{Binding Name, Mode=OneWay}" IsChecked="{Binding IsEnabled, Mode=TwoWay}" />
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <CheckBox Content="Compute SHA-256 hashes (needed for hash rules)" IsChecked="{Binding Config.Detection.HashVerification, Mode=TwoWay}" />
+        <CheckBox Content="Also compute SHA-1 (used by some public advisories)" IsChecked="{Binding Config.Detection.ComputeSha1, Mode=TwoWay}" />
+        <CheckBox Content="Inspect mod metadata" IsChecked="{Binding Config.Detection.MetadataInspection, Mode=TwoWay}" />
+        <CheckBox Content="Verify Authenticode signatures of executables (offline)" IsChecked="{Binding Config.Detection.VerifyDigitalSignatures, Mode=TwoWay}" />
+        <CheckBox Content="Show files classified as likely legitimate" IsChecked="{Binding Config.Detection.ReportLikelyLegitimate, Mode=TwoWay}" />
+        <CheckBox Content="Reuse results for unchanged files (same path, size, timestamp, rules)" IsChecked="{Binding Config.Detection.ReuseVerifiedResults, Mode=TwoWay}" />
+        <StackPanel Margin="0,6" ToolTip="Documented malware is always reported, even if excluded.">
+          <TextBlock Text="Trusted exclusions (one per line: sha256 or sha256 | absolute path)" Style="{StaticResource Text.Body}" Margin="0,0,0,4" />
+          <TextBox Text="{Binding TrustedExclusions, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" AcceptsReturn="True" TextWrapping="NoWrap" MinHeight="64" MaxHeight="160"
+                   VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" VerticalContentAlignment="Top" FontFamily="{StaticResource Font.Mono}" AutomationProperties.Name="Trusted exclusions (one per line: sha256 or sha256 | absolute path)" />
+        </StackPanel>
+        </StackPanel>
+      </Expander>
+      <Expander Header="Performance" IsExpanded="False">
+        <StackPanel Margin="12,8,12,12">
+        <CheckBox Content="Low-resource mode (one worker, small buffers, short pauses)" IsChecked="{Binding Config.Performance.LowResourceMode, Mode=TwoWay}" />
+        <DockPanel Margin="0,3">
+          <TextBlock Text="Maximum parallel tasks" Width="320" Style="{StaticResource Text.Body}" VerticalAlignment="Center" />
+          <TextBox Text="{Binding Config.Performance.MaxParallelTasks, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" Width="140" HorizontalAlignment="Left" AutomationProperties.Name="Maximum parallel tasks" />
+        </DockPanel>
+        <DockPanel Margin="0,3">
+          <TextBlock Text="Maximum queued files" Width="320" Style="{StaticResource Text.Body}" VerticalAlignment="Center" />
+          <TextBox Text="{Binding Config.Performance.MaxQueuedFiles, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" Width="140" HorizontalAlignment="Left" AutomationProperties.Name="Maximum queued files" />
+        </DockPanel>
+        <DockPanel Margin="0,3">
+          <TextBlock Text="Memory budget for archive buffers (MB)" Width="320" Style="{StaticResource Text.Body}" VerticalAlignment="Center" />
+          <TextBox Text="{Binding Config.Performance.MaxMemoryMegabytes, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" Width="140" HorizontalAlignment="Left" AutomationProperties.Name="Memory budget for archive buffers (MB)" />
+        </DockPanel>
+        <CheckBox Content="Run scan workers at reduced priority" IsChecked="{Binding Config.Performance.ReducedPriority, Mode=TwoWay}" />
+        <DockPanel Margin="0,3">
+          <TextBlock Text="Hash buffer size (KB)" Width="320" Style="{StaticResource Text.Body}" VerticalAlignment="Center" />
+          <TextBox Text="{Binding Config.Performance.HashBufferKilobytes, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" Width="140" HorizontalAlignment="Left" AutomationProperties.Name="Hash buffer size (KB)" />
+        </DockPanel>
+        </StackPanel>
+      </Expander>
+      <Expander Header="Network and rule updates" IsExpanded="False">
+        <StackPanel Margin="12,8,12,12">
+        <CheckBox Content="Offline mode (no network access at all)" IsChecked="{Binding Config.Privacy.OfflineMode, Mode=TwoWay}" />
+        <CheckBox Content="Allow signed rule updates" IsChecked="{Binding Config.RuleUpdates.Enabled, Mode=TwoWay}" />
+        <DockPanel Margin="0,3" ToolTip="Must serve rules.json and rules.json.sig. No trusted source is configured by default.">
+          <TextBlock Text="Update source (HTTPS base URL)" Width="320" Style="{StaticResource Text.Body}" VerticalAlignment="Center" />
+          <TextBox Text="{Binding Config.RuleUpdates.Endpoint, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" Width="520" HorizontalAlignment="Left" AutomationProperties.Name="Update source (HTTPS base URL)" />
+        </DockPanel>
+        <DockPanel Margin="0,3">
+          <TextBlock Text="Request timeout (seconds)" Width="320" Style="{StaticResource Text.Body}" VerticalAlignment="Center" />
+          <TextBox Text="{Binding Config.RuleUpdates.TimeoutSeconds, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" Width="140" HorizontalAlignment="Left" AutomationProperties.Name="Request timeout (seconds)" />
+        </DockPanel>
+        <DockPanel Margin="0,3">
+          <TextBlock Text="Maximum download size (KB)" Width="320" Style="{StaticResource Text.Body}" VerticalAlignment="Center" />
+          <TextBox Text="{Binding Config.RuleUpdates.MaxDownloadKilobytes, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" Width="140" HorizontalAlignment="Left" AutomationProperties.Name="Maximum download size (KB)" />
+        </DockPanel>
+        <StackPanel Margin="0,6" ToolTip="Only add keys from a source you trust.">
+          <TextBlock Text="Additional trusted signing keys (base64 ECDSA P-256, one per line)" Style="{StaticResource Text.Body}" Margin="0,0,0,4" />
+          <TextBox Text="{Binding TrustedKeys, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" AcceptsReturn="True" TextWrapping="NoWrap" MinHeight="64" MaxHeight="160"
+                   VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" VerticalContentAlignment="Top" FontFamily="{StaticResource Font.Mono}" AutomationProperties.Name="Additional trusted signing keys (base64 ECDSA P-256, one per line)" />
+        </StackPanel>
+        </StackPanel>
+      </Expander>
+      <Expander Header="Quarantine, reports and history" IsExpanded="False">
+        <StackPanel Margin="12,8,12,12">
+        <DockPanel Margin="0,3">
+          <TextBlock Text="Quarantine folder (empty = default)" Width="320" Style="{StaticResource Text.Body}" VerticalAlignment="Center" />
+          <TextBox Text="{Binding Config.Quarantine.Directory, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" Width="520" HorizontalAlignment="Left" AutomationProperties.Name="Quarantine folder (empty = default)" />
+        </DockPanel>
+        <DockPanel Margin="0,3">
+          <TextBlock Text="Reports folder (empty = default)" Width="320" Style="{StaticResource Text.Body}" VerticalAlignment="Center" />
+          <TextBox Text="{Binding Config.Reports.Directory, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" Width="520" HorizontalAlignment="Left" AutomationProperties.Name="Reports folder (empty = default)" />
+        </DockPanel>
+        <DockPanel Margin="0,3">
+          <TextBlock Text="Default report format" Width="320" Style="{StaticResource Text.Body}" VerticalAlignment="Center" />
+          <ComboBox ItemsSource="{Binding ReportFormats}" SelectedItem="{Binding Config.Reports.DefaultFormat, Mode=TwoWay}" HorizontalAlignment="Left" AutomationProperties.Name="Default report format" />
+        </DockPanel>
+        <CheckBox Content="Redact personal paths in reports by default" IsChecked="{Binding Config.Reports.RedactPersonalPathsByDefault, Mode=TwoWay}" />
+        <DockPanel Margin="0,3">
+          <TextBlock Text="Keep reports for (days)" Width="320" Style="{StaticResource Text.Body}" VerticalAlignment="Center" />
+          <TextBox Text="{Binding Config.Reports.RetentionDays, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" Width="140" HorizontalAlignment="Left" AutomationProperties.Name="Keep reports for (days)" />
+        </DockPanel>
+        <DockPanel Margin="0,3">
+          <TextBlock Text="Maximum number of reports" Width="320" Style="{StaticResource Text.Body}" VerticalAlignment="Center" />
+          <TextBox Text="{Binding Config.Reports.MaxReports, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" Width="140" HorizontalAlignment="Left" AutomationProperties.Name="Maximum number of reports" />
+        </DockPanel>
+        <DockPanel Margin="0,3">
+          <TextBlock Text="Keep scan history for (days)" Width="320" Style="{StaticResource Text.Body}" VerticalAlignment="Center" />
+          <TextBox Text="{Binding Config.Reports.HistoryRetentionDays, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" Width="140" HorizontalAlignment="Left" AutomationProperties.Name="Keep scan history for (days)" />
+        </DockPanel>
+        <DockPanel Margin="0,3">
+          <TextBlock Text="Maximum number of scan records" Width="320" Style="{StaticResource Text.Body}" VerticalAlignment="Center" />
+          <TextBox Text="{Binding Config.Reports.MaxHistorySessions, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" Width="140" HorizontalAlignment="Left" AutomationProperties.Name="Maximum number of scan records" />
+        </DockPanel>
+        <CheckBox Content="Include Windows user name in reports" IsChecked="{Binding Config.Privacy.IncludeUserNameInReports, Mode=TwoWay}" />
+        <CheckBox Content="Include computer name in reports" IsChecked="{Binding Config.Privacy.IncludeMachineNameInReports, Mode=TwoWay}" />
+        </StackPanel>
+      </Expander>
+      <Expander Header="Logging" IsExpanded="False">
+        <StackPanel Margin="12,8,12,12">
+        <DockPanel Margin="0,3">
+          <TextBlock Text="Log level" Width="320" Style="{StaticResource Text.Body}" VerticalAlignment="Center" />
+          <ComboBox ItemsSource="{Binding LogLevels}" SelectedItem="{Binding Config.Logging.Level, Mode=TwoWay}" HorizontalAlignment="Left" AutomationProperties.Name="Log level" />
+        </DockPanel>
+        <DockPanel Margin="0,3">
+          <TextBlock Text="Keep logs for (days)" Width="320" Style="{StaticResource Text.Body}" VerticalAlignment="Center" />
+          <TextBox Text="{Binding Config.Logging.RetentionDays, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" Width="140" HorizontalAlignment="Left" AutomationProperties.Name="Keep logs for (days)" />
+        </DockPanel>
+        <DockPanel Margin="0,3">
+          <TextBlock Text="Maximum log file size (MB)" Width="320" Style="{StaticResource Text.Body}" VerticalAlignment="Center" />
+          <TextBox Text="{Binding Config.Logging.MaxFileMegabytes, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" Width="140" HorizontalAlignment="Left" AutomationProperties.Name="Maximum log file size (MB)" />
+        </DockPanel>
+        <DockPanel Margin="0,3">
+          <TextBlock Text="Maximum total log size (MB)" Width="320" Style="{StaticResource Text.Body}" VerticalAlignment="Center" />
+          <TextBox Text="{Binding Config.Logging.MaxTotalMegabytes, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" Width="140" HorizontalAlignment="Left" AutomationProperties.Name="Maximum total log size (MB)" />
+        </DockPanel>
+        </StackPanel>
+      </Expander>
+      <Expander Header="Safety and confirmations" IsExpanded="False">
+        <StackPanel Margin="12,8,12,12">
+        <CheckBox Content="Ask before quarantining" IsChecked="{Binding Config.Safety.ConfirmQuarantine, Mode=TwoWay}" />
+        <CheckBox Content="Ask before restoring" IsChecked="{Binding Config.Safety.ConfirmRestore, Mode=TwoWay}" />
+        <CheckBox Content="Ask before permanent deletion (mandatory)" IsChecked="{Binding Config.Safety.ConfirmPermanentDeletion, Mode=OneWay}" IsEnabled="False" ToolTip="This protection cannot be disabled." />
+        <CheckBox Content="Validate every path before modifying it (mandatory)" IsChecked="{Binding Config.Safety.EnforcePathValidation, Mode=OneWay}" IsEnabled="False" ToolTip="This protection cannot be disabled." />
+        <CheckBox Content="Verify quarantined copies by SHA-256 (mandatory)" IsChecked="{Binding Config.Quarantine.VerifyIntegrity, Mode=OneWay}" IsEnabled="False" ToolTip="This protection cannot be disabled." />
+        </StackPanel>
+      </Expander>
+      <Expander Header="Startup and automatic scanning" IsExpanded="False">
+        <StackPanel Margin="12,8,12,12">
+        <CheckBox Content="Scan automatically when the application starts" IsChecked="{Binding Config.Startup.ScanOnLaunch, Mode=TwoWay}" />
+        <DockPanel Margin="0,3">
+          <TextBlock Text="Automatic scan type" Width="320" Style="{StaticResource Text.Body}" VerticalAlignment="Center" />
+          <ComboBox ItemsSource="{Binding LaunchScanModes}" SelectedItem="{Binding Config.Startup.ScanModeOnLaunch, Mode=TwoWay}" HorizontalAlignment="Left" AutomationProperties.Name="Automatic scan type" />
+        </DockPanel>
+        <CheckBox Content="Check for signed rule updates at startup (requires online mode)" IsChecked="{Binding Config.Startup.CheckRuleUpdatesOnLaunch, Mode=TwoWay}" />
+        </StackPanel>
+      </Expander>
+      <Expander Header="Interface and accessibility" IsExpanded="False">
+        <StackPanel Margin="12,8,12,12">
+        <DockPanel Margin="0,3">
+          <TextBlock Text="Theme" Width="320" Style="{StaticResource Text.Body}" VerticalAlignment="Center" />
+          <ComboBox ItemsSource="{Binding Themes}" SelectedItem="{Binding Config.Interface.Theme, Mode=TwoWay}" HorizontalAlignment="Left" AutomationProperties.Name="Theme" />
+        </DockPanel>
+        <CheckBox Content="Confirm the scan scope before scanning" IsChecked="{Binding Config.Interface.ShowScanScopeBeforeScan, Mode=TwoWay}" />
+        <CheckBox Content="Confirm before closing during a scan" IsChecked="{Binding Config.Interface.ConfirmExitDuringScan, Mode=TwoWay}" />
+        <DockPanel Margin="0,3">
+          <TextBlock Text="Text size" Width="320" Style="{StaticResource Text.Body}" VerticalAlignment="Center" />
+          <TextBlock DockPanel.Dock="Right" Text="{Binding Config.Accessibility.FontScale, Mode=OneWay, StringFormat=P0}" Width="60" Style="{StaticResource Text.Body}" VerticalAlignment="Center" />
+          <Slider Minimum="0.8" Maximum="2.0" TickFrequency="0.1" IsSnapToTickEnabled="True" Value="{Binding Config.Accessibility.FontScale, Mode=TwoWay}"
+                  Width="240" HorizontalAlignment="Left" AutomationProperties.Name="Text size" />
+        </DockPanel>
+        <CheckBox Content="Use the high-contrast palette" IsChecked="{Binding Config.Accessibility.HighContrast, Mode=TwoWay}" />
+        <CheckBox Content="Reduce motion (the application uses no animations)" IsChecked="{Binding Config.Accessibility.ReduceMotion, Mode=TwoWay}" />
+        <CheckBox Content="Show tooltips" IsChecked="{Binding Config.Accessibility.ShowTooltips, Mode=TwoWay}" />
+        </StackPanel>
+      </Expander>
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</UserControl>

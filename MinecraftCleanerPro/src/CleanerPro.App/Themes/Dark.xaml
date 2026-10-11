@@ -1,0 +1,36 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!-- Dark palette. Text/background pairs meet WCAG 2.1 AA contrast (4.5:1). -->
+  <SolidColorBrush x:Key="Brush.Background" Color="#1B1B1F" />
+  <SolidColorBrush x:Key="Brush.Surface" Color="#26262B" />
+  <SolidColorBrush x:Key="Brush.SurfaceAlt" Color="#2E2E34" />
+  <SolidColorBrush x:Key="Brush.Border" Color="#44444C" />
+  <SolidColorBrush x:Key="Brush.Text" Color="#F3F4F6" />
+  <SolidColorBrush x:Key="Brush.TextMuted" Color="#C2C4CA" />
+  <SolidColorBrush x:Key="Brush.Accent" Color="#4CA3F5" />
+  <SolidColorBrush x:Key="Brush.AccentHover" Color="#6CB4F7" />
+  <SolidColorBrush x:Key="Brush.AccentPressed" Color="#2F86D8" />
+  <SolidColorBrush x:Key="Brush.AccentText" Color="#0B1220" />
+  <SolidColorBrush x:Key="Brush.Danger" Color="#F87171" />
+  <SolidColorBrush x:Key="Brush.DangerHover" Color="#FCA5A5" />
+  <SolidColorBrush x:Key="Brush.DangerText" Color="#1B0B0B" />
+  <SolidColorBrush x:Key="Brush.Warning" Color="#FBBF24" />
+  <SolidColorBrush x:Key="Brush.Success" Color="#4ADE80" />
+  <SolidColorBrush x:Key="Brush.Info" Color="#93C5FD" />
+  <SolidColorBrush x:Key="Brush.Nav" Color="#202024" />
+  <SolidColorBrush x:Key="Brush.NavSelected" Color="#1E3A5F" />
+  <SolidColorBrush x:Key="Brush.NavSelectedText" Color="#E0F0FF" />
+  <SolidColorBrush x:Key="Brush.Focus" Color="#FFFFFF" />
+  <SolidColorBrush x:Key="Brush.Hover" Color="#34343B" />
+  <SolidColorBrush x:Key="Brush.Pressed" Color="#3F3F47" />
+  <SolidColorBrush x:Key="Brush.ButtonBackground" Color="#2E2E34" />
+  <SolidColorBrush x:Key="Brush.Disabled" Color="#6B7280" />
+  <SolidColorBrush x:Key="Brush.Banner" Color="#3B2F12" />
+  <SolidColorBrush x:Key="Brush.BannerText" Color="#FDE68A" />
+  <SolidColorBrush x:Key="Brush.Selection" Color="#264A73" />
+  <SolidColorBrush x:Key="Brush.Class.Known" Color="#FCA5A5" />
+  <SolidColorBrush x:Key="Brush.Class.High" Color="#FCD34D" />
+  <SolidColorBrush x:Key="Brush.Class.Review" Color="#93C5FD" />
+  <SolidColorBrush x:Key="Brush.Class.Legit" Color="#86EFAC" />
+  <SolidColorBrush x:Key="Brush.Class.Unverified" Color="#D1D5DB" />
+</ResourceDictionary>

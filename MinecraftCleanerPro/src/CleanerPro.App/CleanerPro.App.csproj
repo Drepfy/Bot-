@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>CleanerPro.App</RootNamespace>
+    <AssemblyName>MinecraftCleanerPro</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Release publishing: one self-contained executable, no .NET install required. -->
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(PublishSingleFile)' == 'true'">
+    <SelfContained>true</SelfContained>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- WPF projects do not import System.IO implicitly. -->
+    <Using Include="System.IO" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../CleanerPro.Core/CleanerPro.Core.csproj" />
+    <ProjectReference Include="../CleanerPro.Infrastructure/CleanerPro.Infrastructure.csproj" />
+    <ProjectReference Include="../CleanerPro.Configuration/CleanerPro.Configuration.csproj" />
+    <ProjectReference Include="../CleanerPro.Privacy/CleanerPro.Privacy.csproj" />
+    <ProjectReference Include="../CleanerPro.Detection/CleanerPro.Detection.csproj" />
+    <ProjectReference Include="../CleanerPro.Scanner/CleanerPro.Scanner.csproj" />
+    <ProjectReference Include="../CleanerPro.Quarantine/CleanerPro.Quarantine.csproj" />
+    <ProjectReference Include="../CleanerPro.Reporting/CleanerPro.Reporting.csproj" />
+  </ItemGroup>
+</Project>
