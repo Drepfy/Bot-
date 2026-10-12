@@ -29,6 +29,9 @@ from PIL import Image, ImageFilter
 
 import atmosphere as atm
 import blackhole as bh
+import celestial
+import kerr
+import real_sky
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "pack"
@@ -36,14 +39,15 @@ ZIP_NAME = "Diamond-SMP-Black-Hole-Pack.zip"
 LITE_ZIP_NAME = "Diamond-SMP-Black-Hole-Pack-Lite.zip"
 MC = OUT / "assets" / "minecraft"
 
-# Scenes: where each black hole sits and how its disk is tilted.
-OVERWORLD = dict(distance=22, inclination=10, roll=-14, t_max=26000, opacity=2.2, seed=7)
-OVERWORLD_DIR = bh.mc_direction(0, -24)        # due south, 24 degrees up
-PANORAMA = dict(distance=24, inclination=9, roll=-10, t_max=26000, opacity=2.2, seed=11)
+# Scenes: where the black hole sits and how its disk is tilted. Lengths are in units of
+# the hole's mass M; spin a/M = 0.9 makes it a rotating (Kerr) black hole, like Gargantua.
+SPIN = 0.9
+OVERWORLD = dict(spin=SPIN, distance=44, inclination=10, roll=-14, r_out=26, t_max=26000, opacity=2.2, seed=7)
+OVERWORLD_DIR = real_sky.SGR_A_WORLD            # the hole IS Sagittarius A*: due south, 24 degrees up
+PANORAMA = dict(spin=SPIN, distance=48, inclination=9, roll=-10, r_out=26, t_max=26000, opacity=2.2, seed=11)
 PANORAMA_DIR = bh.mc_direction(-28, -9)
-END = dict(distance=18, inclination=17, roll=22, r_out=14, t_max=20000, opacity=2.4, seed=19)
+END = dict(spin=SPIN, distance=36, inclination=17, roll=22, r_out=28, t_max=20000, opacity=2.4, seed=19)
 END_DIR = bh.mc_direction(-90, -32)             # east, high in the End sky
-GALAXY = dict(galactic_north=(0.35, 0.85, 0.4), galactic_centre=(0.2, -0.3, 1.0))
 # The End is lit by "ender light": push the physical colours towards violet.
 END_GRADE = np.array([[0.95, 0.05, 0.30], [0.04, 0.42, 0.10], [0.30, 0.05, 1.05]])
 
@@ -219,7 +223,7 @@ def airglow(dirs):
 
 def overworld_layers(face, ss, pad, galaxy, log_prefix="  "):
     """Night / sunrise / day / sunset / overcast skies for the Overworld (OptiFine 3x2)."""
-    scene = bh.BlackHoleScene(background=galaxy, **OVERWORLD)
+    scene = kerr.KerrScene(background=galaxy, **OVERWORLD)
     w2s = bh.world_to_scene(OVERWORLD_DIR)
     em = Emitter(scene, w2s)
     e_disk = DISK_KEY / em.p997
@@ -290,35 +294,6 @@ def space_faces(scene, w2s, dir_fn, face, ss, pad, grade=None, dither=0):
         faces.append(to8(crop(bh.glare(hdr, scale=face / 1024), pad), dither + k))
         log(f"  face {k + 1}/6")
     return faces
-
-
-def render_sun(size, ss):
-    """The vanilla sun becomes a small black hole (the game draws it additively)."""
-    scene = bh.BlackHoleScene(distance=40, inclination=14, roll=24, r_out=9.5, seed=21, t_max=26000, opacity=2.2)
-    # The sun quad is 30 units wide at distance 100: half-angle tangent 0.3.
-    out = scene.render(camera_dirs(size * ss, size * ss, 0.3)).reshape(size, ss, size, ss, 7).mean(axis=(1, 3))
-    disk = out[..., :3] * (DISK_KEY * 1.2 / np.percentile(out[..., :3] @ bh.LUMA, 99.7))
-    t = (np.arange(size) + 0.5) / size * 2 - 1
-    a, b = np.meshgrid(t, t)
-    fade = np.clip((1.0 - np.sqrt(a * a + b * b)) / 0.25, 0, 1) ** 2
-    srgb = bh.srgb_encode(aces(bh.glare(disk, scale=size / 1024))) * fade[..., None]
-    alpha = np.maximum(srgb.max(-1), out[..., 6] * fade)
-    rgb = np.where(alpha[..., None] > 1e-4, srgb / np.maximum(alpha[..., None], 1e-4), 0)
-    return np.clip(np.round(np.concatenate([rgb, alpha[..., None]], -1) * 255), 0, 255).astype(np.uint8)
-
-
-def render_real_sun(size):
-    """OptiFine sun: a limb-darkened 5800 K disc with atmospheric glare."""
-    t = (np.arange(size) + 0.5) / size * 2 - 1
-    a, b = np.meshgrid(t, t)
-    theta = np.degrees(np.arctan(0.3 * np.sqrt(a * a + b * b)))
-    radius = 1.4  # degrees (the real sun is 0.27; enlarged so it reads in game)
-    mu = np.sqrt(np.clip(1 - (theta / radius) ** 2, 0, 1))
-    disc = np.where(theta < radius, 1 - 0.6 * (1 - mu), 0) * 40.0
-    halo = 1.2 * np.exp(-theta / 0.9) + 0.25 * np.exp(-theta / 3.5) + 0.05 * np.exp(-theta / 10)
-    rgb = (disc + halo)[..., None] * bh.blackbody_colour(5800.0)
-    rgb *= np.clip((16.0 - theta) / 3.0, 0, 1)[..., None]
-    return to8(rgb)
 
 
 def render_end_tile(size, seed):
@@ -476,8 +451,8 @@ GEM_COL = {"#": "#06203d", "W": "#ffffff", "L": "#9ff6ff", "M": "#33d0ea", "D": 
 def make_icon(size=256):
     """Pack icon: the black hole with a pixel-art diamond burning in front of it."""
     galaxy = bh.make_galaxy(256, 41, (0.3, 0.8, 0.5), (0.4, -0.5, 1.0), n_stars=8000)
-    scene = bh.BlackHoleScene(distance=17, inclination=12, roll=-18, r_out=11, seed=33, t_max=26000,
-                              opacity=2.2, background=galaxy)
+    scene = kerr.KerrScene(spin=SPIN, distance=34, inclination=12, roll=-18, r_out=22, seed=33, t_max=26000,
+                           opacity=2.2, background=galaxy)
     ss = 3
     out = scene.render(camera_dirs(size * ss, size * ss, math.tan(math.radians(36))))
     out = out.reshape(size, ss, size, ss, 7).mean(axis=(1, 3))
@@ -556,7 +531,7 @@ PACK_MCMETA = {
             "",  # empty root so the parts below don't inherit each other's style
             {"text": "Diamond SMP ", "color": "aqua", "bold": True},
             {"text": "Black Hole Sky", "color": "light_purple"},
-            {"text": "\nRealistic day & night • ray traced", "color": "gray"},
+            {"text": "\nSpinning black hole • real stars • day & night", "color": "gray"},
         ],
         # 1.20 (format 15) and everything newer, including 1.21.9+ min/max fields.
         "pack_format": 34,
@@ -594,12 +569,6 @@ rotate=false
 weather=clear rain thunder
 """
 
-SUN_PROPS = """# The black hole is its own object in the sky, so the sun is a real sun again.
-source=./sun.png
-blend=add
-"""
-
-
 def write_text(rel, text, root=OUT):
     path = root / rel
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -619,9 +588,10 @@ def zip_dir(src, zpath):
 
 def is_big_sky_texture(rel):
     rel = rel.as_posix()
-    return ((rel.startswith("optifine/sky/") and not rel.endswith("/sun.png"))
+    return (rel.startswith("optifine/sky/")
             or rel.startswith("textures/gui/title/background/panorama_")
-            or rel in ("textures/environment/sun.png", "textures/environment/celestial/sun.png"))
+            or rel.startswith("textures/environment/celestial/")
+            or rel in ("textures/environment/sun.png", "textures/environment/moon_phases.png"))
 
 
 def make_lite():
@@ -649,24 +619,27 @@ def build(quick):
     OUT.mkdir(parents=True)
 
     log("galaxy (stars, Milky Way, dust, nebulae)")
-    galaxy = bh.make_galaxy(512 if quick else 2048, 3, n_stars=40000 if quick else 220000, star_flux=1.1, **GALAXY)
+    # The real sky: 8,800 catalogue stars at their true positions for latitude 37 N with
+    # Sagittarius A* on the meridian, procedural stars below magnitude 6.6, and the Milky Way
+    # along the true galactic plane with its centre right behind the black hole.
+    galaxy = bh.make_galaxy(512 if quick else 2048, 3, n_stars=40000 if quick else 220000, star_flux=4.5,
+                            diffuse=0.0065,
+                            **real_sky.make_galaxy_kwargs(bh.world_to_scene(OVERWORLD_DIR)))
 
     log("overworld sky layers (OptiFine)")
     imgs = overworld_layers(face, ss, pad, galaxy)
     for i, (name, comment, fades, weather) in enumerate(OVERWORLD_LAYERS, 1):
         save(imgs[name], f"optifine/sky/world0/{name}.png")
         write_text(f"assets/minecraft/optifine/sky/world0/sky{i}.properties", layer_props(name, comment, fades, weather))
-    save(render_real_sun(256), "optifine/sky/world0/sun.png")
-    write_text("assets/minecraft/optifine/sky/world0/sun.properties", SUN_PROPS)
 
     log("title screen panorama")
-    pano = bh.BlackHoleScene(background=galaxy, **PANORAMA)
+    pano = kerr.KerrScene(background=galaxy, **PANORAMA)
     for k, img in enumerate(space_faces(pano, bh.world_to_scene(PANORAMA_DIR), panorama_dirs, face, ss, pad,
                                         dither=300)):
         save(img, f"textures/gui/title/background/panorama_{k}.png")
 
     log("End black hole skybox (OptiFine)")
-    end = bh.BlackHoleScene(background=galaxy, **END)
+    end = kerr.KerrScene(background=galaxy, **END)
     tiles = space_faces(end, bh.world_to_scene(END_DIR), optifine_tile_dirs, face, ss, pad,
                         grade=END_GRADE, dither=400)
     sky = np.zeros((2 * face, 3 * face, 3), dtype=np.uint8)
@@ -677,10 +650,15 @@ def build(quick):
     write_text("assets/minecraft/optifine/sky/world1/sky1.properties", END_SKY)
     del galaxy
 
-    log("vanilla sun -> black hole")
-    sun = render_sun(256 if quick else 512, 1 if quick else 3)
+    log("photorealistic sun and moon (so the sky has exactly one black hole)")
+    res = 256 if quick else 512
+    sun = celestial.make_sun(res)
     save(sun, "textures/environment/sun.png")             # up to 1.21.10
     save(sun, "textures/environment/celestial/sun.png")   # 1.21.11 and newer
+    phases = celestial.make_moon_phases(res)
+    for name, img in phases.items():
+        save(img, f"textures/environment/celestial/moon/{name}.png")
+    save(celestial.moon_phase_sheet(phases), "textures/environment/moon_phases.png")
 
     log("vanilla End sky tile, logo, edition, icon, splashes")
     save(render_end_tile(256, 4), "textures/environment/end_sky.png")

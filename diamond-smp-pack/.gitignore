@@ -2,3 +2,4 @@ pack/
 __pycache__/
 personal/
 generator/.cache/
+.pytest_cache/

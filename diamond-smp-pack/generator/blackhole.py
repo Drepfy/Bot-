@@ -294,8 +294,12 @@ def _splat_stars(cube, sdirs, scol, sigma):
 
 
 def make_galaxy(size, seed, galactic_north, galactic_centre, n_stars=200000,
-                diffuse=0.012, star_flux=0.35, mag_range=(-1.5, 12.5)):
-    """Cube map of a realistic night sky (linear radiance, scene frame)."""
+                diffuse=0.012, star_flux=0.35, mag_range=(-1.5, 12.5), extra_stars=None):
+    """Cube map of a realistic night sky (linear radiance, scene frame).
+
+    extra_stars: optional (dirs (N,3) scene frame, vmag (N,), temperature_K (N,)) of real
+    catalogue stars, splatted with the same photometry as the procedural ones (use
+    mag_range to let the procedural population only fill in the fainter stars)."""
     rng = np.random.default_rng(seed)
     gn = normalize(galactic_north)
     gc = normalize(np.asarray(galactic_centre, float) - gn * (np.dot(galactic_centre, gn)))
@@ -328,6 +332,10 @@ def make_galaxy(size, seed, galactic_north, galactic_centre, n_stars=200000,
     flux = 10 ** (-0.4 * mag) * star_flux
     col = blackbody_colour(temp) * flux[:, None]
     _splat_stars(cube, dirs, col, 0.75 * size / 1024)
+    if extra_stars is not None:
+        e_dirs, e_mag, e_temp = (np.asarray(x, dtype=np.float64) for x in extra_stars)
+        e_col = blackbody_colour(e_temp) * (10 ** (-0.4 * e_mag) * star_flux)[:, None]
+        _splat_stars(cube, np.ascontiguousarray(normalize(e_dirs)), np.ascontiguousarray(e_col), 0.75 * size / 1024)
     return cube
 
 

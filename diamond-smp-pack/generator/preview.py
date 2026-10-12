@@ -11,7 +11,9 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 import blackhole as bh
-from build_pack import MC, OPTIFINE_TILES, ROOT
+import kerr
+import real_sky
+from build_pack import MC, OPTIFINE_TILES, OVERWORLD, OVERWORLD_DIR, ROOT
 
 PREVIEWS = ROOT / "previews"
 
@@ -65,6 +67,35 @@ def sample_panorama(faces, dirs):
         b = np.clip((((-(dirs @ u)) / depth + 1) / 2 * size).astype(int), 0, size - 1)
         out[sel] = faces[k][b[sel], a[sel]]
     return out
+
+
+def project(world_dir, yaw, pitch, w, h, fov_y=70.0):
+    """Pixel position of a world direction in player_view(yaw, pitch, w, h, fov_y), or None."""
+    f = bh.mc_direction(yaw, pitch)
+    u = bh.mc_direction(yaw, pitch - 90)
+    r = np.cross(f, u)
+    z = world_dir @ f
+    if z <= 0:
+        return None
+    t = math.tan(math.radians(fov_y / 2))
+    x = (world_dir @ r) / z / (t * w / h)
+    y = -(world_dir @ u) / z / t
+    if abs(x) >= 1 or abs(y) >= 1:
+        return None
+    return (x + 1) / 2 * w, (y + 1) / 2 * h
+
+
+def lensed(world_dir, iters=8):
+    """Where a star actually appears: the black hole bends even far-away starlight by a few
+    degrees, so find the view direction whose traced ray escapes towards the star."""
+    scene = kerr.KerrScene(background=None, **OVERWORLD)
+    w2s = bh.world_to_scene(OVERWORLD_DIR)
+    view = np.array(world_dir, dtype=np.float64)
+    for _ in range(iters):
+        _, diag = scene.trace_info((w2s @ view)[None])
+        escaped = bh.normalize(w2s.T @ diag[0, :3])
+        view = bh.normalize(view + (world_dir - escaped))
+    return view
 
 
 def add_sun(img, dirs, sun_dir, strength=1.0):
@@ -170,12 +201,36 @@ def main():
     title.alpha_composite(splash, (lx + lw - 330, ly + 60))
     title.convert("RGB").save(PREVIEWS / "title_screen.png", optimize=True)
 
-    sun = Image.open(MC / "textures/environment/sun.png").convert("RGBA")
-    rgba = np.array(sun).astype(np.float64)
-    add = rgba[..., :3] * rgba[..., 3:] / 255
-    day_bg = np.clip(np.array([90, 140, 230]) + add, 0, 255).astype(np.uint8)
-    night_bg = np.clip(add, 0, 255).astype(np.uint8)
-    Image.fromarray(np.concatenate([day_bg, night_bg], 1)).save(PREVIEWS / "vanilla_sun.png", optimize=True)
+    # The real stars, away from the lensing: looking north-west at the Big Dipper and Polaris.
+    yaw, pitch, fov = 135, -30, 80
+    d = player_view(yaw, pitch, W, H, fov)
+    north = Image.fromarray(add_ground(sample_optifine(sky("night"), d), d, (8, 11, 8)).astype(np.uint8))
+    draw = ImageDraw.Draw(north)
+    for name in ("Polaris", "Kochab", "Dubhe", "Merak", "Phecda", "Megrez", "Alioth", "Mizar", "Alkaid",
+                 "Arcturus", "Capella"):
+        pos = project(lensed(real_sky.named_star(name)), yaw, pitch, W, H, fov)
+        if pos is not None:
+            draw.text((pos[0] + 9, pos[1] - 9), name, fill=(170, 200, 255), font=font(15))
+    north.save(PREVIEWS / "real_stars_north.png", optimize=True)
+
+    def additive(rel, bg):
+        rgba = np.array(Image.open(MC / rel).convert("RGBA")).astype(np.float64)
+        return np.clip(bg + rgba[..., :3] * rgba[..., 3:] / 255, 0, 255).astype(np.uint8)
+
+    sun_day = additive("textures/environment/celestial/sun.png", np.array([90, 140, 230]))
+    sun_night = additive("textures/environment/celestial/sun.png", np.zeros(3))
+    s = sun_day.shape[0]
+    order = ["waxing_crescent", "first_quarter", "waxing_gibbous", "full_moon",
+             "waning_gibbous", "third_quarter", "waning_crescent"]
+    moons = [additive(f"textures/environment/celestial/moon/{n}.png", np.full(3, 4.0)) for n in order]
+    m = moons[0].shape[0]
+    crop = [mo[m * 3 // 8:m * 5 // 8, m * 3 // 8:m * 5 // 8] for mo in moons]  # zoom on the disc
+    strip = Image.fromarray(np.concatenate(crop, 1)).resize((7 * s // 3, s // 3), Image.LANCZOS)
+    top = np.concatenate([sun_day, sun_night], 1)
+    sheet = Image.new("RGB", (max(top.shape[1], strip.width), top.shape[0] + strip.height), (4, 4, 4))
+    sheet.paste(Image.fromarray(top), (0, 0))
+    sheet.paste(strip, ((sheet.width - strip.width) // 2, top.shape[0]))
+    sheet.save(PREVIEWS / "sun_moon.png", optimize=True)
     print("previews written to", PREVIEWS)
 
 
