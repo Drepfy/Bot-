@@ -2,10 +2,12 @@
 
     python merge_packs.py path/to/OtherPack.zip            # uses the full Diamond SMP zip
     python merge_packs.py path/to/OtherPack.zip --lite     # uses the Lite zip
-    python merge_packs.py OtherPack.zip --vanilla armor potions --light-boost
+    python merge_packs.py OtherPack.zip --vanilla armor potions --light-boost --sky-shader
 
 --vanilla drops the other pack's armor and/or potion files so those show the
-plain vanilla look; --light-boost adds the Diamond SMP Light Boost shader.
+plain vanilla look; --light-boost adds the Diamond SMP Light Boost shader;
+--sky-shader adds the live Shader Sky (black hole + real stars without mods;
+--sky-shader lite for the lighter version).
 
 Where both packs contain the same file (sun, End sky, title logo, pack icon)
 Diamond SMP wins; everything else (blocks, items, GUI, particles, shaders...)
@@ -26,6 +28,7 @@ import zipfile
 from pathlib import Path
 
 import light_boost
+import shader_sky
 
 ROOT = Path(__file__).resolve().parent.parent
 SKIP = ("__MACOSX/", ".DS_Store", "Thumbs.db")
@@ -117,6 +120,8 @@ def main():
     ap.add_argument("--vanilla", nargs="+", choices=sorted(VANILLA_GROUPS), default=[],
                     help="drop the other pack's files for these groups so they look vanilla")
     ap.add_argument("--light-boost", action="store_true", help="add the Diamond SMP Light Boost (1.21.9+)")
+    ap.add_argument("--sky-shader", nargs="?", const="high", choices=sorted(shader_sky.QUALITY),
+                    help="add the Diamond SMP Shader Sky (1.21.9+): live black hole and real stars, no mods")
     args = ap.parse_args()
 
     ours = read_zip(ROOT / ("Diamond-SMP-Black-Hole-Pack-Lite.zip" if args.lite else "Diamond-SMP-Black-Hole-Pack.zip"))
@@ -138,6 +143,8 @@ def main():
         lo, hi = t_lo, t_hi
     if args.light_boost:  # the boost only exists for 1.21.9+, where overlays use min/max_format
         lo = max(lo, tuple(light_boost.MIN_FORMAT))
+    if args.sky_shader:   # so does the shader sky
+        lo = max(lo, tuple(shader_sky.MIN_FORMAT))
     pack = {
         "description": [
             "",
@@ -157,10 +164,16 @@ def main():
     merged.update(ours)
     meta = {"pack": pack}
     overlays = list(their_meta.get("overlays", {}).get("entries", []))
+    extras = []
     if args.light_boost:
         merged.update({n: t.encode() for n, t in light_boost.overlay_files().items()})
         overlays += light_boost.overlay_entries()
-        pack["description"][3]["text"] = "\nBlack hole sky \u2022 light boost \u2022 personal merge"
+        extras.append("light boost")
+    if args.sky_shader:
+        merged.update({n: t.encode() for n, t in shader_sky.overlay_files(args.sky_shader).items()})
+        overlays += shader_sky.overlay_entries()
+        extras.append("live sky")
+    pack["description"][3]["text"] = "\n" + " \u2022 ".join(["Black hole sky", *extras, "personal merge"])
     if overlays:
         meta["overlays"] = {"entries": overlays}
     merged["pack.mcmeta"] = (json.dumps(meta, indent=2, ensure_ascii=False) + "\n").encode()
@@ -172,6 +185,9 @@ def main():
         + "".join(f"  {n}\n" for n in overridden)
         + ("\nLeft out so they look vanilla:\n" + "".join(f"  [{g}] {n}\n" for g, n in dropped) if dropped else "")
         + ("\nIncludes the Diamond SMP Light Boost (1.21.9 - 1.21.11, 26.1 - 26.3).\n" if args.light_boost else "")
+        + (f"\nIncludes the Diamond SMP Shader Sky ({args.sky_shader}): the black hole and the real night sky\n"
+           "drawn live by Minecraft's own sky shaders (1.21.9 - 1.21.11, 26.1 - 26.3). With OptiFine or\n"
+           "Nuit, switch their custom sky off to see it.\n" if args.sky_shader else "")
     ).encode()
 
     safe = re.sub(r"[^A-Za-z0-9]+", "-", name).strip("-") or "Other"
@@ -190,6 +206,9 @@ def main():
         print(f"  vanilla {g}:", n)
     if args.light_boost:
         print("  + light boost overlays:", ", ".join(e["directory"] for e in light_boost.overlay_entries()))
+    if args.sky_shader:
+        print(f"  + shader sky ({args.sky_shader}) overlays:",
+              ", ".join(e["directory"] for e in shader_sky.overlay_entries()))
 
 
 if __name__ == "__main__":
