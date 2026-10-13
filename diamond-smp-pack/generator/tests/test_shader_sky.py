@@ -211,6 +211,32 @@ def test_overlays_hide_the_painted_overworld_sky_only():
     assert not any("world1" in n for n in files), "the End keeps its painted sky"
 
 
+def test_night_extras_are_in_every_shader():
+    for quality in ss.QUALITY:
+        files = ss.overlay_files(quality)
+        for d, *_ in ss.VARIANTS:
+            src = files[f"{d}/{ss.SHADERS}/include/diamond_starfield.glsl"]
+            assert "dsf_extras(d, px, t)" in src and "vec3 dsf_comet(" in src and "vec3 dsf_satellites(" in src
+            # unlensed: the extras are added next to the aurora and meteors, before the lens
+            body = src[src.index("vec3 dsf_night_sky("):]
+            assert body.index("dsf_extras(d, px, t)") < body.index("dsf_lens(")
+
+
+@pytest.mark.parametrize("quality", sorted(ss.QUALITY))
+def test_satellite_passes_fit_their_slots(quality):
+    sch = ss.satellite_schedule(quality)
+    per_day = sum(slots * p for slots, p, _ in ss.SATELLITES[:ss.QUALITY[quality]["satellites"]])
+    assert 0.5 * per_day < len(sch) < 1.5 * per_day
+    for slots, p, seed, (lo, hi) in ss._sat_streams(quality):
+        assert hi <= 1200.0 / slots, "a pass must fit in its time slot"
+    for m in sch:
+        assert 0.0 <= m["rise"] < m["set"] <= 1.0
+        # it rises and sets at the horizon and passes overhead in between
+        mid = m["where"](0.5 * (m["rise"] + m["set"]))
+        assert mid[1] > 0.14 and m["where"](m["rise"] + 1e-9)[1] < 0.2 and m["where"](m["set"] - 1e-9)[1] < 0.2
+        assert abs(np.linalg.norm(mid) - 1) < 1e-9
+
+
 def _have_browser():
     if shutil.which("node") is None:
         return False
@@ -229,3 +255,11 @@ def test_webgl_black_hole_at_night_only_and_northern_lights(quality):
     import shader_preview as sp
     m = sp.day_night_check(quality)      # asserts inside: vanilla day, hole at dusk/night, aurora north at night
     assert m["day_clock"] == 0
+
+
+@pytest.mark.skipif(not _have_browser(), reason="needs node + playwright + chromium")
+@pytest.mark.parametrize("quality", sorted(ss.QUALITY))
+def test_webgl_planets_comet_and_satellites(quality):
+    import shader_preview as sp
+    m = sp.extras_check(quality)          # asserts inside: positions, the comet's tail, nothing by day
+    assert m["by day"] == 0

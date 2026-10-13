@@ -34,6 +34,8 @@ import blackhole as bh
 import celestial
 import earth
 import kerr
+import lighting
+import night_sky
 import real_sky
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -55,6 +57,8 @@ END_DIR = bh.mc_direction(-90, -32)             # east, high in the End sky
 END_GRADE = np.array([[0.95, 0.05, 0.30], [0.04, 0.42, 0.10], [0.30, 0.05, 1.05]])
 
 BG_GAIN = 150.0       # stars and Milky Way are lifted like an HDR astrophoto
+STAR_FLUX = 4.5       # galaxy texture: flux of a magnitude 0 star
+GALAXY_DIFFUSE = 0.0065   # galaxy texture: brightness of the Milky Way's glow
 DISK_KEY = 1.35       # exposure: the brightest 0.3% of the disk lands here (pre-tonemap)
 SKY_KEY = 0.28        # exposure for the clear day sky at the zenith
 TWILIGHT_KEY = 1.3    # exposure for the brightest horizon glow at sunrise/sunset
@@ -218,10 +222,30 @@ class Emitter:
 # ---------------------------------------------------------------------------
 
 
-def airglow(dirs):
-    """Faint natural glow of the night air, strongest towards the horizon."""
-    s = np.clip(dirs[..., 1], 0, 1)
-    return (0.0025 / (s + 0.12))[..., None] * np.array([0.45, 0.75, 0.40])
+def night_extras(world, face, galaxy_size):
+    """Planets, the great comet, zodiacal light and airglow (night_sky.py), in the galaxy
+    texture's units so they sit among the stars at the right brightness.
+
+    The planets and the comet's nucleus are steady dots shaped like the texture's stars
+    (bh.make_galaxy splats each star as a Gaussian of sigma 0.75 * size / 1024 texels),
+    widened a little where a pixel is bigger than that so they never fall between pixels.
+    They are in our own solar system, so the black hole does not bend their light."""
+    world = bh.normalize(world)
+    # night_sky's radiance scale is the Shader Sky's, where the Milky Way glow has gain MW_GAIN
+    out = night_sky.extended_radiance(world) * (GALAXY_DIFFUSE / night_sky.MW_GAIN)
+    sig_t = 0.75 * galaxy_size / 1024
+    sig_a = sig_t * 2.0 / galaxy_size
+    sig = math.hypot(sig_a, (2.0 / face) / 2.5)
+    for _, d, peak, tint in night_sky.point_sources():
+        flux = STAR_FLUX * peak / night_sky.STAR_GAIN
+        cos_t = world @ d
+        near = cos_t > math.cos(12 * sig)
+        if not near.any():
+            continue
+        th2 = 2.0 * (1.0 - cos_t[near])                           # ~ theta^2
+        prof = (sig_a / sig) ** 2 * np.exp(-th2 / (2 * sig * sig)) / (2 * math.pi * sig_t * sig_t)
+        out[near] += flux * prof[:, None] * tint
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -535,13 +559,14 @@ def overworld_layers(face, ss, pad, galaxy, log_prefix="  "):
         halo = upsample(em.glow(fn(lo_face, lo_pad), AUREOLE), full)
         trn = clear_air.transmittance(world)
         disk, stars = raw[..., :3], raw[..., 3:6]
+        extras = night_extras(world, face, galaxy.shape[1])
         r, c = divmod(tile, 3)
         for name in names:
             if name == "night":
                 # Clear night air carries less haze than daytime air, and eyes adapt at night:
                 # the sky background is lifted twice as much. The aurora glows 100-300 km up,
                 # in front of the stars, and is dimmed by the same air near the horizon.
-                hdr = ((disk + stars * BG_GAIN * 2) * trn * e_disk + halo * e_disk * 0.35 + airglow(world)
+                hdr = ((disk + (stars + extras) * BG_GAIN * 2) * trn * e_disk + halo * e_disk * 0.35
                        + aurora.radiance(world) * trn)
             else:
                 sky, e_sky = daytime[name]
@@ -808,6 +833,10 @@ Bring a totem!
 Northern lights tonight!
 557.7 nanometres of green!
 Look north after dark!
+A great comet in the west!
+Venus, the evening star!
+Wave at the space station!
+Warm torches, blue moonlight!
 """
 
 
@@ -920,8 +949,8 @@ def build(quick):
     # The real sky: 8,800 catalogue stars at their true positions for latitude 37 N with
     # Sagittarius A* on the meridian, procedural stars below magnitude 6.6, and the Milky Way
     # along the true galactic plane with its centre right behind the black hole.
-    galaxy = bh.make_galaxy(512 if quick else 2048, 3, n_stars=40000 if quick else 220000, star_flux=4.5,
-                            diffuse=0.0065,
+    galaxy = bh.make_galaxy(512 if quick else 2048, 3, n_stars=40000 if quick else 220000, star_flux=STAR_FLUX,
+                            diffuse=GALAXY_DIFFUSE,
                             **real_sky.make_galaxy_kwargs(bh.world_to_scene(OVERWORLD_DIR)))
 
     log("overworld sky layers (OptiFine)")
@@ -969,6 +998,11 @@ def build(quick):
     make_icon().save(OUT / "pack.png", optimize=True)
     write_text("assets/minecraft/texts/splashes.txt", SPLASHES)
     write_text("pack.mcmeta", json.dumps(PACK_MCMETA, indent=2, ensure_ascii=False) + "\n")
+
+    log("OptiFine extras: coloured lightmaps, emissive textures, natural textures, better grass")
+    for rel, data in lighting.optifine_files().items():
+        (OUT / rel).parent.mkdir(parents=True, exist_ok=True)
+        (OUT / rel).write_bytes(data)
 
     zip_dir(OUT, ROOT / ZIP_NAME)
     make_lite()

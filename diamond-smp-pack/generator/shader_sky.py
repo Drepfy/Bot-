@@ -46,6 +46,7 @@ import numpy as np
 from PIL import Image
 
 import blackhole as bh
+import night_sky
 import real_sky
 
 HERE = Path(__file__).resolve().parent
@@ -114,6 +115,12 @@ AURORA_CURTAINS = [
 # Shooting stars, per stream: time slots per 20-minute day (a slot holds at most one meteor),
 # chance of a meteor in a slot. 150 slots of 8 s at 0.3 + 100 of 12 s at 0.3: ~3.75 a minute.
 METEORS = [(150, 0.30), (100, 0.30)]
+# Satellites, per stream: time slots per 20-minute day (a slot holds at most one pass), chance
+# of a pass in a slot, and how long a pass from horizon to horizon takes (seconds, min and max).
+# About one a minute (two streams in Lite); one pass in ten is a big bright station (like the ISS).
+SATELLITES = [(12, 0.70, (80.0, 98.0)), (8, 0.60, (110.0, 140.0)), (10, 0.60, (90.0, 115.0))]
+SATELLITE_BRIGHT = 0.10                    # share of passes that are a bright space station
+AIRGLOW_GAIN = 0.1                         # airglow relative to night_sky.py's (it is faint to the eye)
 
 # The main pack's painted OptiFine Overworld sky layers. A sky mod (OptiFine, Skyboxify) would draw
 # them over the live sky, doubling the stars, so every overlay replaces them with blank images.
@@ -125,11 +132,13 @@ QUALITY = {
     "high": dict(zip="Diamond-SMP-Shader-Sky.zip", label="Shader Sky", steps=160, step_k=0.06, layers=2,
                  disk_octaves=4, region=34.0, mag_limit=4.5, faint=True,
                  octaves=dict(warp=1, thick=1, clouds=4, dust=4, lane=1, neb=2),
-                 curtains=3, ray_octaves=2, folds=3, aurora_fine=True, meteors=2),
+                 curtains=3, ray_octaves=2, folds=3, aurora_fine=True, meteors=2, satellites=3,
+                 comet_streamers=True),
     "lite": dict(zip="Diamond-SMP-Shader-Sky-Lite.zip", label="Shader Sky Lite", steps=80, step_k=0.12,
                  layers=1, disk_octaves=3, region=30.0, mag_limit=4.0, faint=False,
                  octaves=dict(warp=0, thick=0, clouds=2, dust=2, lane=0, neb=0),
-                 curtains=2, ray_octaves=1, folds=2, aurora_fine=False, meteors=1),
+                 curtains=2, ray_octaves=1, folds=2, aurora_fine=False, meteors=1, satellites=2,
+                 comet_streamers=False),
 }
 
 # (overlay directory, vanilla versions to check against, min_format, max_format, style)
@@ -1053,6 +1062,7 @@ vec3 dsf_meteors(vec3 d, float px, float t) {
     return acc;
 }
 
+$EXTRAS
 // The night sky (display colour, to be added on top of the vanilla sky) for the world
 // direction d. px: angular size of a pixel; t: dsf_time(GameTime).
 vec3 dsf_night_sky(vec3 d, float px, float t) {
@@ -1060,7 +1070,7 @@ vec3 dsf_night_sky(vec3 d, float px, float t) {
         return vec3(0.0);      // below the horizon
     }
     // The aurora and meteors are in our own air: the hole does not bend them.
-    vec3 light = dsf_aurora(d, px, t) + dsf_meteors(d, px, t);
+    vec3 light = dsf_aurora(d, px, t) + dsf_meteors(d, px, t) + dsf_extras(d, px, t);
     vec3 src;
     vec3 eRad;
     vec3 eTan;
@@ -1168,6 +1178,47 @@ def _u01(h):
     return (h >> 8) / 16777216.0
 
 
+def _sat_streams(quality):
+    return [(slots, p, 4441 * (j + 1), lens) for j, (slots, p, lens) in enumerate(SATELLITES[:QUALITY[quality]["satellites"]])]
+
+
+def satellite_schedule(quality="high"):
+    """Every satellite pass of one 20-minute day, as dsf_satellites() draws them: GameTime when it
+    rises and sets, whether it is a bright station, its magnitude, and a function giving its
+    world direction at a GameTime."""
+    out = []
+    for slots, p, seed, (lo, hi) in _sat_streams(quality):
+        slot_len = 1200.0 / slots
+        for slot in range(slots):
+            h = _pcg((slot * 2246822519 + seed) & 0xFFFFFFFF)
+            if _u01(h) > p:
+                continue
+            h2 = _pcg(h)
+            h3 = _pcg(h2)
+            h4 = _pcg(h3)
+            h5 = _pcg(h4)
+            h6 = _pcg(h5)
+            h7 = _pcg(h6)
+            station = _u01(h7) < SATELLITE_BRIGHT
+            dur = min((lo + (hi - lo) * _u01(h2)) * (1.25 if station else 1.0), slot_len)
+            start = slot * slot_len + _u01(h3) * max(slot_len - dur, 0.0)
+            az = 2 * math.pi * _u01(h4)
+            el = math.asin(0.15 + 0.85 * _u01(h5))
+            hor = np.array([math.sin(az), 0.0, -math.cos(az)])
+            top = math.cos(el) * hor + np.array([0.0, math.sin(el), 0.0])
+            side = np.array([math.cos(az), 0.0, math.sin(az)]) * (1.0 if (h6 & 1) == 0 else -1.0)
+            um = _u01(_pcg((h6 + 7) & 0xFFFFFFFF))
+            mag = (-1.8 - 1.2 * um) if station else (1.6 + 2.6 * um)
+
+            def where(game_time, start=start, dur=dur, top=top, side=side):
+                q = (game_time * 1200.0 - start) / dur
+                phi = math.atan(6.0 * (2.0 * q - 1.0))
+                return math.cos(phi) * top + math.sin(phi) * side
+            out.append(dict(rise=start / 1200.0, set=(start + dur) / 1200.0, station=station, mag=mag,
+                            shadow=_u01(_pcg(h7)), where=where))
+    return sorted(out, key=lambda m: m["rise"])
+
+
 def meteor_schedule(quality="high"):
     """Every shooting star of one 20-minute day, as dsf_meteors() draws them: GameTime when it
     lights up, duration (s), start direction, direction of travel and path length (radians)."""
@@ -1197,6 +1248,200 @@ def meteor_schedule(quality="high"):
     return sorted(out, key=lambda m: m["time"])
 
 
+EXTRAS_GLSL = Template("""\
+// ---- More in the night sky (see night_sky.py): the planets, a great comet, zodiacal light,
+// airglow and satellites. All of it is in our own solar system or our own air, so the black
+// hole does not bend it, and none of it twinkles (planets are discs, not points).
+// Planets and the comet's nucleus: world direction and peak brightness; colour.
+const vec4 DSF_PL[$PL_N] = vec4[$PL_N](
+    $PL
+);
+const vec3 DSF_PL_C[$PL_N] = vec3[$PL_N](
+    $PL_C
+);
+// The comet: head, the direction the tails stream (at the head), and the third axis
+const vec3 DSF_CO_H = $CO_H;
+const vec3 DSF_CO_T = $CO_T;
+const vec3 DSF_CO_N = $CO_N;
+const vec4 DSF_CO_P = $CO_P;     // dust curve, dust length, ion length, coma size (degrees)
+const float DSF_CO_GAIN = $CO_GAIN;
+const bool DSF_CO_STREAMERS = $CO_STREAMERS;
+// Zodiacal light and the gegenschein: the ecliptic pole and the Sun (below the horizon)
+const vec3 DSF_ZL_POLE = $ZL_POLE;
+const vec3 DSF_ZL_SUN = $ZL_SUN;
+const vec2 DSF_ZL_GAIN = $ZL_GAIN;
+const vec3 DSF_ZL_COL = $ZL_COL;
+// Airglow: the glowing layer ~90 km up (k = R / (R + h)), gain, colours
+const float DSF_AG_K = $AG_K;
+const float DSF_AG_GAIN = $AG_GAIN;
+const vec3 DSF_AG_GREEN = $AG_GREEN;
+const vec3 DSF_AG_RED = $AG_RED;
+// Satellites, per stream: slots per 20 min, chance of a pass per slot, seed, shortest pass (s),
+// longest pass (s)
+const int DSF_SAT_N = $SAT_N;
+const vec4 DSF_SAT[$SAT_LEN] = vec4[$SAT_LEN](
+    $SAT
+);
+const vec2 DSF_SAT_LEN_S[$SAT_LEN] = vec2[$SAT_LEN](
+    $SAT_LEN_S
+);
+const float DSF_SAT_BRIGHT = $SAT_BRIGHT;
+
+float dsf_sq(float x) {
+    return x * x;
+}
+
+// A steady round dot of peak brightness `peak` at p (theta^2 from |d x p|^2: exact in float).
+float dsf_dot(vec3 d, vec3 p, float inv2s2, float invHalo, float peak) {
+    if (dot(d, p) < 0.99) {
+        return 0.0;
+    }
+    vec3 x = cross(d, p);
+    float th2 = dot(x, x);
+    float g = 1.0 + 0.18 * clamp(log2(peak * 20.0), 0.0, 6.0);       // bright ones look bigger
+    return peak * (exp(-th2 * inv2s2 / (g * g)) + DSF_HALO * exp(-sqrt(th2) * invHalo));
+}
+
+vec3 dsf_planets(vec3 d, float inv2s2, float invHalo) {
+    vec3 acc = vec3(0.0);
+    for (int i = 0; i < $PL_N; i++) {
+        acc += DSF_PL_C[i] * dsf_dot(d, DSF_PL[i].xyz, inv2s2, invHalo, DSF_PL[i].w);
+    }
+    return acc;
+}
+
+// Coma, a broad curved yellow-white dust tail and a long straight blue ion tail, both pointing
+// away from the Sun. Bright knots drift out along the ion tail, one every ~30 s.
+vec3 dsf_comet(vec3 d, float t) {
+    float ch = dot(d, DSF_CO_H);
+    if (ch < 0.2) {
+        return vec3(0.0);
+    }
+    float s = degrees(atan(dot(d, DSF_CO_T), ch));     // along the tails (gnomonic, degrees)
+    float u = degrees(atan(dot(d, DSF_CO_N), ch));     // across them
+    float sp = max(s, 0.0);
+    float on = step(0.0, s);
+    float width = 0.35 + 0.16 * sp;
+    float dust = exp(-0.5 * dsf_sq((u - DSF_CO_P.x * sp * sp) / width)) * exp(-sp / (0.38 * DSF_CO_P.y))
+               * on * (1.0 - exp(-sp / 0.4));
+    float streak = 0.75 + 0.25 * cos(u * 9.0 + 0.6 * sin(s * 0.7));
+    if (DSF_CO_STREAMERS) {
+        streak *= 0.8 + 0.4 * dsf_sq(sin(0.35 * s - 6.2831853 * 40.0 * t));
+    }
+    float ion = exp(-0.5 * dsf_sq(u / (0.18 + 0.025 * sp))) * exp(-sp / (0.45 * DSF_CO_P.z)) * streak
+              * on * (1.0 - exp(-sp / 0.6));
+    float coma = 3.0 * exp(-length(vec2(s, u)) / DSF_CO_P.w);
+    return DSF_CO_GAIN * (dust * $CO_DUST + ion * 0.55 * $CO_ION + coma * $CO_COMA);
+}
+
+// Sunlight scattered by interplanetary dust: a faint band along the ecliptic, brighter towards
+// the Sun, and the gegenschein, a faint oval glow opposite the Sun.
+vec3 dsf_zodiacal(vec3 d) {
+    float beta = degrees(asin(clamp(dot(d, DSF_ZL_POLE), -1.0, 1.0)));
+    float elong = degrees(acos(clamp(dot(d, DSF_ZL_SUN), -1.0, 1.0)));
+    float width = 9.0 + 14.0 * exp(-(elong - 40.0) / 45.0);
+    float band = exp(-abs(beta) / width) * pow(max(elong, 30.0) / 60.0, -2.3);
+    float anti = exp(-0.5 * (dsf_sq((180.0 - elong) / 9.0) + dsf_sq(beta / 6.0)));
+    return (DSF_ZL_GAIN.x * band + DSF_ZL_GAIN.y * anti) * DSF_ZL_COL;
+}
+
+// The glow of the upper air: brightest a little above the horizon, where a line of sight runs
+// furthest through the glowing layer (the van Rhijn effect).
+vec3 dsf_airglow(vec3 d) {
+    float y = clamp(d.y, 0.0, 1.0);
+    float vr = inversesqrt(1.0 - DSF_AG_K * DSF_AG_K * (1.0 - y * y));
+    float green = vr * (0.6 + 0.4 * exp(-y / 0.25));
+    float red = vr * exp(-y / 0.08) * 0.35;
+    return DSF_AG_GAIN * clamp(d.y / 0.02, 0.0, 1.0) * (green * DSF_AG_GREEN + red * DSF_AG_RED);
+}
+
+// Satellites: sunlit spacecraft gliding steadily across the sky in a few minutes, fastest
+// overhead; some fade out half-way as they pass into the Earth's shadow. Now and then a big
+// bright space station.
+vec3 dsf_satellites(vec3 d, float inv2s2, float invHalo, float t) {
+    vec3 acc = vec3(0.0);
+    for (int j = 0; j < DSF_SAT_N; j++) {
+        vec4 m = DSF_SAT[j];
+        float s = t * m.x;
+        float slot = floor(s);
+        uint h = dsf_pcg(uint(slot) * 2246822519u + uint(m.z));
+        if (dsf_u01(h) > m.y) {
+            continue;
+        }
+        float slotLen = 1200.0 / m.x;                       // seconds
+        uint h2 = dsf_pcg(h);
+        uint h3 = dsf_pcg(h2);
+        uint h4 = dsf_pcg(h3);
+        uint h5 = dsf_pcg(h4);
+        uint h6 = dsf_pcg(h5);
+        uint h7 = dsf_pcg(h6);
+        bool station = dsf_u01(h7) < DSF_SAT_BRIGHT;
+        float dur = min(mix(DSF_SAT_LEN_S[j].x, DSF_SAT_LEN_S[j].y, dsf_u01(h2)) * (station ? 1.25 : 1.0), slotLen);
+        float q = ((s - slot) * slotLen - dsf_u01(h3) * max(slotLen - dur, 0.0)) / dur;   // 0..1 on the pass
+        if (q <= 0.0 || q >= 1.0) {
+            continue;
+        }
+        // The pass: a great circle whose highest point is at azimuth az, elevation el.
+        float az = 6.2831853 * dsf_u01(h4);
+        float el = asin(mix(0.15, 1.0, dsf_u01(h5)));
+        vec3 hor = vec3(sin(az), 0.0, -cos(az));
+        vec3 top = cos(el) * hor + vec3(0.0, sin(el), 0.0);
+        vec3 side = vec3(cos(az), 0.0, sin(az)) * ((h6 & 1u) == 0u ? 1.0 : -1.0);
+        float phi = atan(6.0 * (2.0 * q - 1.0));         // steady speed along the orbit: fastest overhead
+        vec3 p = cos(phi) * top + sin(phi) * side;
+        float um = dsf_u01(dsf_pcg(h6 + 7u));
+        float mag = station ? -1.8 - 1.2 * um : 1.6 + 2.6 * um;
+        float b = DSF_STAR_GAIN * exp2(-1.3287712 * mag);
+        b *= smoothstep(0.0, 0.06, q) * (1.0 - smoothstep(0.94, 1.0, q));
+        float shadow = dsf_u01(dsf_pcg(h7));             // where it enters the Earth's shadow (if < 1)
+        if (shadow < 0.45) {
+            b *= 1.0 - smoothstep(0.45 + shadow, 0.53 + shadow, q);
+        }
+        if (b > 0.0) {
+            acc += vec3(1.0, 0.96, 0.90) * dsf_dot(d, p, inv2s2, invHalo, b);
+        }
+    }
+    return acc;
+}
+
+vec3 dsf_extras(vec3 d, float px, float t) {
+    float sigma = 0.7 * max(px, 1e-5);
+    float inv2s2 = 0.5 / (sigma * sigma);
+    float invHalo = 1.0 / min(2.0 * px, DSF_HALO_R);
+    return dsf_planets(d, inv2s2, invHalo) + dsf_comet(d, t) + dsf_zodiacal(d) + dsf_airglow(d)
+         + dsf_satellites(d, inv2s2, invHalo, t);
+}
+""")
+
+
+def extras_constants(quality="high"):
+    """Template values for the night extras of diamond_starfield.glsl."""
+    q = QUALITY[quality]
+    pts = night_sky.point_sources()
+    h, t = night_sky.comet_frame()
+    sats = SATELLITES[:q["satellites"]]
+    return dict(
+        PL_N=len(pts),
+        PL=",\n    ".join("vec4(" + ", ".join(_fl(v) for v in (*bh.normalize(d), peak)) + ")" for _, d, peak, _ in pts),
+        PL_C=",\n    ".join(_vec(c) for _, _, _, c in pts),
+        CO_H=_vec(h), CO_T=_vec(t), CO_N=_vec(np.cross(h, t)),
+        CO_P="vec4(" + ", ".join(_fl(v) for v in (night_sky.COMET_DUST_CURVE, night_sky.COMET_DUST_LENGTH,
+                                                    night_sky.COMET_ION_LENGTH, night_sky.COMET_COMA_DEG)) + ")",
+        CO_GAIN=_fl(night_sky.COMET_GAIN), CO_STREAMERS="true" if q["comet_streamers"] else "false",
+        CO_DUST=_vec(night_sky.COMET_DUST), CO_ION=_vec(night_sky.COMET_ION), CO_COMA=_vec(night_sky.COMET_COMA),
+        ZL_POLE=_vec(night_sky.ECLIPTIC_POLE), ZL_SUN=_vec(bh.normalize(night_sky.SUN_DIR)),
+        ZL_GAIN=f"vec2({_fl(night_sky.ZODIACAL_GAIN)}, {_fl(night_sky.GEGENSCHEIN_GAIN)})",
+        ZL_COL=_vec(night_sky.ZODIACAL_COLOUR),
+        AG_K=_fl(night_sky.R_EARTH_KM / (night_sky.R_EARTH_KM + night_sky.AIRGLOW_KM)),
+        AG_GAIN=_fl(night_sky.AIRGLOW_GAIN * AIRGLOW_GAIN), AG_GREEN=_vec(night_sky.AIRGLOW_GREEN),
+        AG_RED=_vec(night_sky.AIRGLOW_RED),
+        SAT_N=len(sats), SAT_LEN=max(len(sats), 1),
+        SAT=",\n    ".join("vec4(" + ", ".join(_fl(v) for v in (slots, p, 4441 * (j + 1), 0.0)) + ")"
+                           for j, (slots, p, _) in enumerate(sats)) or "vec4(1.0, 0.0, 0.0, 0.0)",
+        SAT_LEN_S=",\n    ".join(f"vec2({_fl(lo)}, {_fl(hi)})" for _, _, (lo, hi) in sats) or "vec2(1.0, 1.0)",
+        SAT_BRIGHT=_fl(SATELLITE_BRIGHT))
+
+
 def _meteor_streams(quality):
     return [(slots, p, 7777 * (j + 1)) for j, (slots, p) in enumerate(METEORS[:QUALITY[quality]["meteors"]])]
 
@@ -1212,6 +1457,7 @@ def include_starfield(quality="high"):
     stars = ("vec4(" + ", ".join(_fl(v) for v in e) + ")" for e in entries)
     return STARFIELD_GLSL.substitute(
         **aurora_constants(quality),
+        EXTRAS=EXTRAS_GLSL.substitute(**extras_constants(quality)),
 
         QUALITY=quality, MAG_LIMIT=_fl(q["mag_limit"]), H=_vec(BH_DIR), PERP0=_vec(perp0),
         GN=_vec(gn), GC=_vec(gc), GS=_vec(gs), TH_SH=_fl(th_sh), LX0=_fl(x0), LX1=_fl(x1), LN=len(psi),
@@ -1440,7 +1686,7 @@ def build_addon(quality="high", icon=None):
                 "",
                 {"text": "Diamond SMP ", "color": "aqua", "bold": True},
                 {"text": q["label"], "color": "light_purple"},
-                {"text": "\nNight black hole, real stars, aurora • no mods • 1.21.9+", "color": "gray"},
+                {"text": "\nBlack hole, real stars, aurora, comet • no mods • 1.21.9+", "color": "gray"},
             ],
             "min_format": MIN_FORMAT,
             "max_format": MAX_FORMAT,

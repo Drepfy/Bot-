@@ -13,6 +13,7 @@ from PIL import Image, ImageDraw, ImageFont
 import blackhole as bh
 import earth
 import kerr
+import night_sky
 import real_sky
 from build_pack import MC, OPTIFINE_TILES, OVERWORLD, OVERWORLD_DIR, ROOT
 
@@ -218,6 +219,17 @@ def main():
         if pos is not None:
             draw.text((pos[0] + 9, pos[1] - 9), name, fill=(170, 200, 255), font=font(15))
     north.save(PREVIEWS / "real_stars_north.png", optimize=True)
+
+    # More in the night sky: looking west at the great comet, Venus and Mars (night_sky.py).
+    yaw, pitch, fov = 106, -17, 80
+    d = player_view(yaw, pitch, W, H, fov)
+    west = Image.fromarray(add_ground(sample_optifine(sky("night"), d), d, (8, 11, 8)).astype(np.uint8))
+    draw = ImageDraw.Draw(west)
+    for name, direction, _, _ in night_sky.point_sources():
+        pos = project(direction, yaw, pitch, W, H, fov)        # in our solar system: not lensed
+        if pos is not None:
+            draw.text((pos[0] + 10, pos[1] - 9), name, fill=(170, 200, 255), font=font(15))
+    west.save(PREVIEWS / "night_west.png", optimize=True)
 
     def additive(rel, bg):
         rgba = np.array(Image.open(MC / rel).convert("RGBA")).astype(np.float64)

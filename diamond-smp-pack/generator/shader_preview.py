@@ -23,6 +23,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 import blackhole as bh
+import night_sky
 import preview
 import real_sky
 import shader_sky as ss
@@ -277,13 +278,29 @@ NORTH_STARS = ("Polaris", "Kochab", "Dubhe", "Merak", "Phecda", "Megrez", "Aliot
                "Caph")
 
 
+def _station_shot():
+    """The highest space-station pass of the day: (GameTime, its direction then)."""
+    passes = [m for m in ss.satellite_schedule("high") if m["station"]]
+    best = max(passes, key=lambda m: m["where"](0.5 * (m["rise"] + m["set"]))[1])
+    t = best["rise"] + 0.42 * (best["set"] - best["rise"])
+    return t, best["where"](t)
+
+
 def stills(quality="high"):
     w, h = 960, 540
+    t_iss, d_iss = _station_shot()
+    alt_iss, az_iss = real_sky.horizontal(d_iss)
+    near = {name: d for name, d, _, _ in night_sky.point_sources()}       # not bent by the hole
+    near["space station"] = d_iss
     shots = [
         ("Day: vanilla's blue sky, no black hole", 0, -22, 70.0, DAY, (), {}),
         ("Sunset: the black hole fades in", 0, -22, 70.0, SUNSET, (), {}),
-        ("Night: the black hole, real stars + Milky Way", 0, -22, 70.0, NIGHT, (), {}),
+        ("Night: the black hole, real stars + Milky Way", 0, -22, 70.0, NIGHT, ("Jupiter",), {}),
         ("Night, north: northern lights + Big Dipper", *NORTH, NIGHT, NORTH_STARS, dict(time=NORTH_TIME)),
+        ("Night, west: a great comet, Venus and Mars", 112, -16, 70.0, NIGHT, ("Venus", "Mars", "Comet"),
+         dict(time=0.31)),
+        ("Night: a space station gliding over", az_iss + 180.0 + 14.0, -alt_iss + 8.0, 70.0, NIGHT,
+         ("space station", "Saturn", "Jupiter"), dict(time=t_iss)),
     ]
     frames = [frame(yaw, pitch, w, h, fov=fov, **cfg, **extra) for _, yaw, pitch, fov, cfg, _, extra in shots]
     imgs = render(frames, quality)
@@ -293,13 +310,13 @@ def stills(quality="high"):
         im = Image.fromarray(preview.label(img, text).astype(np.uint8))
         draw = ImageDraw.Draw(im)
         for name in names:
-            pos = preview.project(image_direction(real_sky.named_star(name)), yaw, pitch, w, h, fov)
+            d = near[name] if name in near else image_direction(real_sky.named_star(name))
+            pos = preview.project(d, yaw, pitch, w, h, fov)
             if pos is not None:
                 draw.text((pos[0] + 7, pos[1] - 8), name, fill=(190, 210, 255), font=preview.font(13))
         panels.append(np.array(im))
-    top = np.concatenate(panels[:2], axis=1)
-    bottom = np.concatenate(panels[2:], axis=1)
-    out = np.concatenate([top, bottom], axis=0).astype(np.uint8)
+    rows = [np.concatenate(panels[k:k + 2], axis=1) for k in range(0, len(panels), 2)]
+    out = np.concatenate(rows, axis=0).astype(np.uint8)
     path = PREVIEWS / ("shader_sky.png" if quality == "high" else f"shader_sky_{quality}.png")
     Image.fromarray(out).save(path, optimize=True)
     print(f"wrote {path.relative_to(HERE.parent)}")
@@ -478,6 +495,62 @@ def day_night_check(quality="high"):
     return m
 
 
+def _centroid(lum, x, y, r=2):
+    """Brightness-weighted centre of the dot nearest pixel position (x, y), minus the sky glow."""
+    ix, iy = int(round(x - 0.5)), int(round(y - 0.5))
+    win = lum[iy - r:iy + r + 1, ix - r:ix + r + 1]
+    win = win - lum[iy - r - 2:iy + r + 3, ix - r - 2:ix + r + 3].min()
+    if win.sum() <= 0:
+        return 99.0, 0.0
+    yy, xx = np.mgrid[-r:r + 1, -r:r + 1]
+    cx, cy = ix + 0.5 + (win * xx).sum() / win.sum(), iy + 0.5 + (win * yy).sum() / win.sum()
+    return math.hypot(cx - x, cy - y), float(lum[iy - 1:iy + 2, ix - 1:ix + 2].max())
+
+
+def extras_check(quality="high"):
+    """The planets shine where night_sky.py puts them (not bent by the hole); a satellite glides
+    along the path satellite_schedule() predicts; the comet's tails glow above the sky; and none of
+    it shows by day. Returns the measurements."""
+    w, h, fov = 640, 360, 50.0
+    night = dict(NIGHT, time=0.31)
+    shots = []
+    for name, d, peak, _ in night_sky.planets():
+        alt, az = real_sky.horizontal(d)
+        if alt > 10:
+            shots.append((name, d, az + 180.0 + 6.0, -alt - 4.0, night))
+    station = next(m for m in ss.satellite_schedule(quality) if m["station"] and m["rise"] < 0.30 < m["set"] - 0.03)
+    for t in (0.30, 0.30 + 6.0 / 1200.0):
+        d = station["where"](t)
+        alt, az = real_sky.horizontal(d)
+        shots.append(("station", d, az + 180.0 + 4.0, -alt + 3.0, dict(NIGHT, time=t)))
+    head, tail = night_sky.comet_frame()
+    tail_pt = bh.normalize(head + math.tan(math.radians(6.0)) * tail)
+    ref_pt = bh.normalize(head - math.tan(math.radians(6.0)) * tail)
+    alt, az = real_sky.horizontal(head)
+    shots.append(("comet", tail_pt, az + 180.0, -alt - 5.0, night))
+    shots.append(("comet by day", tail_pt, az + 180.0, -alt - 5.0, dict(DAY, time=0.31)))
+    shots.append(("day sky alone", tail_pt, az + 180.0, -alt - 5.0, dict(DAY, time=0.31, stars=False)))
+    imgs = render([frame(yaw, pitch, w, h, fov=fov, **cfg) for _, _, yaw, pitch, cfg in shots], quality)
+    m = {"by day": float(np.abs(imgs[-2].astype(float) - imgs[-1].astype(float)).max())}
+    for (name, d, yaw, pitch, cfg), img in zip(shots[:-2], imgs[:-2]):
+        lum = img.astype(float).mean(-1)
+        if name == "comet":
+            p, q = preview.project(tail_pt, yaw, pitch, w, h, fov), preview.project(ref_pt, yaw, pitch, w, h, fov)
+            box = lambda c: lum[int(c[1]) - 4:int(c[1]) + 5, int(c[0]) - 4:int(c[0]) + 5].mean()  # noqa: E731
+            m[name] = box(p) - box(q)            # tail minus the sky on the other side of the head
+            continue
+        p = preview.project(d, yaw, pitch, w, h, fov)
+        err, peak = _centroid(lum, *p)
+        key = name if name != "station" else f"station@{len([k for k in m if k.startswith('station')])}"
+        m[key] = (round(err, 3), peak)
+    print(f"extras check ({quality}): " + ", ".join(f"{k} {v}" for k, v in m.items()))
+    for k, (err, peak) in ((k, v) for k, v in m.items() if isinstance(v, tuple)):
+        assert err < 0.7 and peak > 60, f"{k} should be a dot right where night_sky.py / the schedule put it"
+    assert m["comet"] > 6, "the comet's tail should glow"
+    assert m["by day"] == 0, "by day the sky is vanilla's: no comet, planets or satellites"
+    return m
+
+
 def main():
     PREVIEWS.mkdir(exist_ok=True)
     stills("high")
@@ -486,6 +559,7 @@ def main():
     if "--check" in sys.argv:
         check()
         day_night_check()
+        extras_check()
 
 
 if __name__ == "__main__":

@@ -118,6 +118,21 @@ def test_add_ons_accept_text_and_binary_files(packs):
     assert "only one sky" in files["DIAMOND_SMP_MERGE.txt"].decode()
 
 
+def test_colored_light_replaces_the_light_boost(packs, monkeypatch):
+    other, tmp = packs
+    monkeypatch.setattr(mp.lighting, "overlay_files",
+                        lambda: {"cl/assets/minecraft/shaders/core/lightmap.fsh": "void main() { /* colour */ }"})
+    out, _ = mp.merge(other, out=tmp / "m.zip", light_boost_on=True, colored_light=True, verbose=False)
+    files = read(out)
+    assert "cl/assets/minecraft/shaders/core/lightmap.fsh" in files
+    assert "lb/assets/minecraft/shaders/core/lightmap.fsh" not in files, "two lightmap overlays would fight"
+    meta = json.loads(files["pack.mcmeta"])
+    dirs = [e["directory"] for e in meta["overlays"]["entries"]]
+    assert dirs == ["ov"] + [e["directory"] for e in mp.lighting.overlay_entries()]
+    assert meta["pack"]["min_format"] == 69
+    assert "Colored Lighting" in files["DIAMOND_SMP_MERGE.txt"].decode()
+
+
 def test_packs_without_terrain_shaders_are_untouched():
     files = {"assets/minecraft/shaders/include/x.glsl": b"", "assets/minecraft/shaders/core/sky.fsh": b""}
     assert mp.sodium_unsafe_shaders(files) == {}

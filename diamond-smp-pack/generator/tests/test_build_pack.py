@@ -183,3 +183,24 @@ def test_daytime_layers_have_no_black_hole():
         return img[r * n:(r + 1) * n, c * n:(c + 1) * n].astype(float).mean()
     assert abs(tile_mean(imgs["overcast_day"], 2) - tile_mean(imgs["overcast_day"], 4)) < 0.5
     assert tile_mean(imgs["overcast_night"], 2) > tile_mean(imgs["overcast_night"], 4) + 1
+
+
+def test_planets_are_steady_dots_as_bright_as_stars_of_their_magnitude():
+    import math
+    import night_sky
+    face, size = 512, 2048
+    for name, d, peak, tint in night_sky.planets():
+        # a small patch of sky around the planet, at the tile's pixel spacing
+        e1 = bh.normalize(np.cross(d, [0.0, 1.0, 0.0]))
+        e2 = np.cross(d, e1)
+        px = 2.0 / face
+        g = (np.arange(-12, 13)) * px
+        a, b = np.meshgrid(g, g)
+        dirs = bh.normalize(d + a[..., None] * e1 + b[..., None] * e2)
+        img = bp.night_extras(dirs, face, size)
+        # integrated over the patch: the star photometry of bh.make_galaxy (flux * texel solid angle)
+        mag = -2.5 * math.log10(peak / night_sky.STAR_GAIN)
+        expect = bp.STAR_FLUX * 10 ** (-0.4 * mag) * (2.0 / size) ** 2 * tint
+        got = (img - np.median(img, axis=(0, 1))).sum(axis=(0, 1)) * px * px
+        assert np.allclose(got, expect, rtol=0.08), name
+        assert np.unravel_index(img.mean(-1).argmax(), img.shape[:2]) == (12, 12), name

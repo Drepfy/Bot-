@@ -2,10 +2,12 @@
 
     python merge_packs.py path/to/OtherPack.zip            # uses the full Diamond SMP zip
     python merge_packs.py path/to/OtherPack.zip --lite     # uses the Lite zip
-    python merge_packs.py OtherPack.zip --vanilla armor potions --light-boost --sky-shader
+    python merge_packs.py OtherPack.zip --vanilla armor potions --colored-light --sky-shader
 
 --vanilla drops the other pack's armor and/or potion files so those show the
 plain vanilla look; --light-boost adds the Diamond SMP Light Boost shader;
+--colored-light adds the Colored Lighting (warm torches, blue moonlight), which
+includes the boost;
 --sky-shader adds the live Shader Sky (black hole + real stars without mods;
 --sky-shader lite for the lighter version), which then replaces the painted
 Overworld skybox so there is only ever one sky.
@@ -35,6 +37,7 @@ import zipfile
 from pathlib import Path
 
 import light_boost
+import lighting
 import shader_sky
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -184,8 +187,11 @@ def read_zip(path):
 
 
 def merge(other, lite=False, name=None, out=None, vanilla=(), light_boost_on=False, sky_shader=None,
-          keep_terrain_shaders=False, verbose=True):
-    """Build the merged zip; returns (output path, report dict)."""
+          keep_terrain_shaders=False, colored_light=False, verbose=True):
+    """Build the merged zip; returns (output path, report dict). colored_light adds the Colored
+    Lighting, which already includes the Light Boost (both live in the lightmap shader)."""
+    if colored_light:
+        light_boost_on = False
     ours = read_zip(ROOT / ("Diamond-SMP-Black-Hole-Pack-Lite.zip" if lite else "Diamond-SMP-Black-Hole-Pack.zip"))
     theirs = read_zip(other)
     dropped = []
@@ -210,7 +216,7 @@ def merge(other, lite=False, name=None, out=None, vanilla=(), light_boost_on=Fal
     lo, hi = max(o_lo, t_lo), min(o_hi, t_hi)
     if lo > hi:  # no overlap: trust the other pack, it is the version-specific one
         lo, hi = t_lo, t_hi
-    if light_boost_on:  # the boost only exists for 1.21.9+, where overlays use min/max_format
+    if light_boost_on or colored_light:  # only for 1.21.9+, where overlays use min/max_format
         lo = max(lo, tuple(light_boost.MIN_FORMAT))
     if sky_shader:   # so does the shader sky
         lo = max(lo, tuple(shader_sky.MIN_FORMAT))
@@ -238,6 +244,10 @@ def merge(other, lite=False, name=None, out=None, vanilla=(), light_boost_on=Fal
         merged.update({n: _bytes(t) for n, t in light_boost.overlay_files().items()})
         overlays += light_boost.overlay_entries()
         extras.append("light boost")
+    if colored_light:
+        merged.update({n: _bytes(t) for n, t in lighting.overlay_files().items()})
+        overlays += lighting.overlay_entries()
+        extras.append("colored light")
     if sky_shader:
         merged.update({n: _bytes(t) for n, t in shader_sky.overlay_files(sky_shader).items()})
         overlays += shader_sky.overlay_entries()
@@ -256,6 +266,9 @@ def merge(other, lite=False, name=None, out=None, vanilla=(), light_boost_on=Fal
         + ("\nLeft out of the other pack so the merge loads cleanly (Sodium compatible, no ignored files):\n"
            + "".join(f"  {n}  ({why})\n" for n, why in sorted(cleaned.items())) if cleaned else "")
         + ("\nIncludes the Diamond SMP Light Boost (1.21.9 - 1.21.11, 26.1 - 26.3).\n" if light_boost_on else "")
+        + ("\nIncludes the Diamond SMP Colored Lighting with the Light Boost (1.21.9 - 1.21.11, 26.1 - 26.3):\n"
+           "warm torches, blue moonlight, a red Nether and a violet End, drawn by Minecraft's lightmap shader.\n"
+           if colored_light else "")
         + (f"\nIncludes the Diamond SMP Shader Sky ({sky_shader}): the black hole and the real night sky\n"
            "drawn live by Minecraft's own sky shaders (1.21.9 - 1.21.11, 26.1 - 26.3). On those versions it\n"
            "replaces the painted Overworld skybox (OptiFine / Skyboxify / Nuit), so there is only one sky.\n"
@@ -283,6 +296,8 @@ def merge(other, lite=False, name=None, out=None, vanilla=(), light_boost_on=Fal
             print(f"  left out: {n} ({why})")
         if light_boost_on:
             print("  + light boost overlays:", ", ".join(e["directory"] for e in light_boost.overlay_entries()))
+        if colored_light:
+            print("  + colored lighting overlays:", ", ".join(e["directory"] for e in lighting.overlay_entries()))
         if sky_shader:
             print(f"  + shader sky ({sky_shader}) overlays:",
                   ", ".join(e["directory"] for e in shader_sky.overlay_entries()))
@@ -298,6 +313,8 @@ def main():
     ap.add_argument("--vanilla", nargs="+", choices=sorted(VANILLA_GROUPS), default=[],
                     help="drop the other pack's files for these groups so they look vanilla")
     ap.add_argument("--light-boost", action="store_true", help="add the Diamond SMP Light Boost (1.21.9+)")
+    ap.add_argument("--colored-light", action="store_true",
+                    help="add the Diamond SMP Colored Lighting, which includes the Light Boost (1.21.9+)")
     ap.add_argument("--sky-shader", nargs="?", const="high", choices=sorted(shader_sky.QUALITY),
                     help="add the Diamond SMP Shader Sky (1.21.9+): live black hole and real stars, no mods")
     ap.add_argument("--keep-terrain-shaders", action="store_true",
@@ -305,7 +322,7 @@ def main():
     args = ap.parse_args()
     merge(args.other, lite=args.lite, name=args.name, out=args.out, vanilla=args.vanilla,
           light_boost_on=args.light_boost, sky_shader=args.sky_shader,
-          keep_terrain_shaders=args.keep_terrain_shaders)
+          keep_terrain_shaders=args.keep_terrain_shaders, colored_light=args.colored_light)
 
 
 if __name__ == "__main__":
