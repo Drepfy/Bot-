@@ -1,7 +1,7 @@
 """Preview the Shader Sky add-on by running its real shaders in WebGL (headless Chromium).
 
     python shader_preview.py          # writes previews/shader_sky*.png/.gif
-    python shader_preview.py --check  # also checks star positions against the catalogue
+    python shader_preview.py --check  # also checks star positions, and day/night/aurora behaviour
 
 The harness reproduces what vanilla Minecraft feeds those shaders: the sky disc mesh
 (a fan at y = 16, radius 512), the 1500-quad star mesh drawn with an index buffer,
@@ -270,27 +270,32 @@ def ground(img, yaw, pitch, fov, night):
     return preview.add_ground(img.astype(float), dirs, (12, 14, 18) if night else (62, 92, 52))
 
 
+# Looking north at night: the northern lights over the real stars around the pole.
+NORTH = (170, -24, 80.0)
+NORTH_TIME = 0.425
+NORTH_STARS = ("Polaris", "Kochab", "Dubhe", "Merak", "Phecda", "Megrez", "Alioth", "Mizar", "Alkaid", "Schedar",
+               "Caph")
+
+
 def stills(quality="high"):
     w, h = 960, 540
     shots = [
-        ("Day: the hole hangs in the blue sky", 0, -22, 70.0, DAY, ()),
-        ("Sunset: the first stars come out", 0, -22, 70.0, SUNSET, ()),
-        ("Night: real stars + Milky Way, bent into a ring", 0, -22, 70.0, NIGHT, ()),
-        ("Night, north-west: the real Big Dipper", 135, -30, 80.0, NIGHT,
-         ("Polaris", "Kochab", "Dubhe", "Merak", "Phecda", "Megrez", "Alioth", "Mizar", "Alkaid", "Arcturus",
-          "Capella")),
+        ("Day: vanilla's blue sky, no black hole", 0, -22, 70.0, DAY, (), {}),
+        ("Sunset: the black hole fades in", 0, -22, 70.0, SUNSET, (), {}),
+        ("Night: the black hole, real stars + Milky Way", 0, -22, 70.0, NIGHT, (), {}),
+        ("Night, north: northern lights + Big Dipper", *NORTH, NIGHT, NORTH_STARS, dict(time=NORTH_TIME)),
     ]
-    frames = [frame(yaw, pitch, w, h, fov=fov, **cfg) for _, yaw, pitch, fov, cfg, _ in shots]
+    frames = [frame(yaw, pitch, w, h, fov=fov, **cfg, **extra) for _, yaw, pitch, fov, cfg, _, extra in shots]
     imgs = render(frames, quality)
     panels = []
-    for (text, yaw, pitch, fov, cfg, names), img in zip(shots, imgs):
+    for (text, yaw, pitch, fov, cfg, names, _), img in zip(shots, imgs):
         img = ground(img, yaw, pitch, fov, cfg["star_b"] > 0.2)
         im = Image.fromarray(preview.label(img, text).astype(np.uint8))
         draw = ImageDraw.Draw(im)
         for name in names:
             pos = preview.project(image_direction(real_sky.named_star(name)), yaw, pitch, w, h, fov)
             if pos is not None:
-                draw.text((pos[0] + 7, pos[1] - 8), name, fill=(170, 200, 255), font=preview.font(13))
+                draw.text((pos[0] + 7, pos[1] - 8), name, fill=(190, 210, 255), font=preview.font(13))
         panels.append(np.array(im))
     top = np.concatenate(panels[:2], axis=1)
     bottom = np.concatenate(panels[2:], axis=1)
@@ -299,6 +304,15 @@ def stills(quality="high"):
     Image.fromarray(out).save(path, optimize=True)
     print(f"wrote {path.relative_to(HERE.parent)}")
     return imgs
+
+
+def _save_gif(imgs, path, frame_ms):
+    """Animated GIF with one shared palette (so colours do not flicker between frames)."""
+    sheet = Image.fromarray(np.concatenate([i[::4, ::4] for i in imgs], axis=0).astype(np.uint8))
+    palette = sheet.quantize(colors=256, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
+    pil = [Image.fromarray(i.astype(np.uint8)).quantize(palette=palette, dither=Image.Dither.NONE) for i in imgs]
+    pil[0].save(path, save_all=True, append_images=pil[1:], duration=frame_ms, loop=0, optimize=True)
+    print(f"wrote {path.relative_to(HERE.parent)} ({path.stat().st_size / 1e6:.1f} MB)")
 
 
 def animation(n=32, quality="high"):
@@ -315,6 +329,28 @@ def animation(n=32, quality="high"):
     pil[0].save(path, save_all=True, append_images=pil[1:], duration=int(8000 / n), loop=0, optimize=True)
     print(f"wrote {path.relative_to(HERE.parent)} ({path.stat().st_size / 1e6:.1f} MB)")
     return imgs
+
+
+def aurora_animation(seconds=6.0, fps=8, fade=1.0, quality="high", w=512, h=288):
+    """The northern lights looking north at night, as a seamless loop: the last `fade` seconds
+    are cross-faded into the start. Timed so that a shooting star crosses the view."""
+    yaw, pitch, fov = 180.0, -22.0, 78.0
+    # a meteor in the northern sky, a second into the loop
+    meteor = next(m for m in ss.meteor_schedule(quality) if m["duration"] > 0.6 and m["start"][2] < -0.6
+                  and 0.3 < m["start"][1] < 0.7)
+    t0 = meteor["time"] - 1.2 / 1200.0
+    n, nf = int(round(seconds * fps)), int(round(fade * fps))
+    frames = [frame(yaw, pitch, w, h, fov=fov, time=t0 + k / fps / 1200.0, **NIGHT) for k in range(n + nf)]
+    imgs = [ground(i, yaw, pitch, fov, True) for i in render(frames, quality)]
+    out = []
+    for k in range(n):
+        if k < nf:      # the start blends from the frames after the end, so the loop has no jump
+            a = k / nf
+            out.append(imgs[n + k] * (1 - a) + imgs[k] * a)
+        else:
+            out.append(imgs[k])
+    _save_gif(out, PREVIEWS / "shader_sky_aurora.gif", int(round(1000 / fps)))
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -390,12 +426,66 @@ def check(quality="high"):
     return worst
 
 
+def green_excess(img):
+    """How much greener than red and blue each pixel is (only the aurora is green in this sky)."""
+    img = img.astype(float)
+    return img[..., 1] - np.maximum(img[..., 0], img[..., 2])
+
+
+def day_night_check(quality="high"):
+    """The black hole only shows at night (fading in at dusk); by day the sky is vanilla's, untouched
+    (it does not change with the animation clock, and has no structure); the northern lights hang in
+    the north at night only (not in the south, not by day, not in rain). Returns the measurements."""
+    w, h, fov = 480, 270, 70.0
+    south, north = (0, -22), NORTH[:2]
+    frames = [
+        frame(*south, w, h, fov=fov, time=0.37, **DAY),
+        frame(*south, w, h, fov=fov, time=0.53, **DAY),
+        frame(*south, w, h, fov=fov, time=0.37, **SUNSET),
+        frame(*south, w, h, fov=fov, time=0.372, **SUNSET),
+        frame(*south, w, h, fov=fov, time=0.37, **NIGHT),
+        frame(*south, w, h, fov=fov, time=0.372, **NIGHT),
+        frame(*north, w, h, fov=fov, time=NORTH_TIME, **NIGHT),
+        frame(*north, w, h, fov=fov, time=NORTH_TIME, **DAY),
+        frame(*north, w, h, fov=fov, time=NORTH_TIME, **dict(NIGHT, sky=(0.02, 0.02, 0.025), star_b=0.0)),  # rain
+        frame(*south, w, h, fov=fov, time=NORTH_TIME, sky_pass=False, **NIGHT),
+    ]
+    day, day2, dusk, dusk2, night, night2, aurora, aurora_day, aurora_rain, south_stars = (
+        i.astype(float) for i in render(frames, quality))
+    # where the hole is in the southern view
+    yy, xx = np.mgrid[0:h, 0:w]
+    cx, cy = preview.project(ss.BH_DIR, *south, w, h, fov)
+    hole = (xx - cx) ** 2 + (yy - cy) ** 2 < (0.22 * w) ** 2
+    m = dict(
+        day_clock=np.abs(day - day2).max(),                           # 0: nothing animates by day
+        day_detail=np.abs(np.diff(day, 2, axis=1)).max(),             # vanilla's smooth gradient
+        dusk_clock=np.abs(dusk - dusk2)[hole].max(),                  # the disk orbits at dusk, fainter
+        night_clock=np.abs(night - night2)[hole].max(),               # and at night
+        dusk_hole=dusk[hole].max(),
+        night_hole=night[hole].max(),
+        aurora_north=(green_excess(aurora) > 12).mean(),              # share of the view that is aurora
+        aurora_peak=aurora[..., 1][green_excess(aurora) > 12].max(),  # its brightest green
+        aurora_day=green_excess(aurora_day).max(),
+        aurora_rain=green_excess(aurora_rain).max(),
+        aurora_south=(green_excess(south_stars) > 12).mean(),
+    )
+    print(f"day/night check ({quality}): " + ", ".join(f"{k} {v:.3g}" for k, v in m.items()))
+    assert m["day_clock"] == 0 and m["day_detail"] <= 3, "the day sky must be vanilla's"
+    assert 8 < m["dusk_clock"] < m["night_clock"] and m["night_hole"] > 200, "the hole: faint at dusk, bright at night"
+    assert m["aurora_north"] > 0.08 and 90 < m["aurora_peak"] < 200, "northern lights expected in the north at night"
+    assert m["aurora_day"] <= 0 and m["aurora_rain"] <= 0, "no northern lights by day or in rain"
+    assert m["aurora_south"] < 0.002, "the northern lights belong to the northern sky"
+    return m
+
+
 def main():
     PREVIEWS.mkdir(exist_ok=True)
     stills("high")
     animation()
+    aurora_animation()
     if "--check" in sys.argv:
         check()
+        day_night_check()
 
 
 if __name__ == "__main__":

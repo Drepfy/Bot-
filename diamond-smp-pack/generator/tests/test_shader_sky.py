@@ -198,6 +198,19 @@ def test_addon_zips(tmp_path, monkeypatch):
         assert out.stat().st_size < 400_000
 
 
+def test_overlays_hide_the_painted_overworld_sky_only():
+    import io
+    from PIL import Image
+    files = ss.overlay_files("high")
+    for d, *_ in ss.VARIANTS:
+        pngs = [n for n in files if n.startswith(f"{d}/") and n.endswith(".png")]
+        assert len(pngs) == len(ss.PAINTED_SKY) and all("/optifine/sky/world0/" in n for n in pngs)
+        for n in pngs:
+            img = np.asarray(Image.open(io.BytesIO(files[n])).convert("RGBA"))
+            assert img.shape[1] * 2 == img.shape[0] * 3 and img[..., 3].max() == 0, n
+    assert not any("world1" in n for n in files), "the End keeps its painted sky"
+
+
 def _have_browser():
     if shutil.which("node") is None:
         return False
@@ -208,3 +221,11 @@ def _have_browser():
 def test_webgl_render_puts_real_stars_in_place():
     import shader_preview as sp
     assert sp.check("high") < 0.6
+
+
+@pytest.mark.skipif(not _have_browser(), reason="needs node + playwright + chromium")
+@pytest.mark.parametrize("quality", sorted(ss.QUALITY))
+def test_webgl_black_hole_at_night_only_and_northern_lights(quality):
+    import shader_preview as sp
+    m = sp.day_night_check(quality)      # asserts inside: vanilla day, hole at dusk/night, aurora north at night
+    assert m["day_clock"] == 0

@@ -1,4 +1,5 @@
-"""Diamond SMP Shader Sky: the black hole and the real night sky, drawn LIVE by vanilla shaders.
+"""Diamond SMP Shader Sky: the black hole, the real night sky and the northern lights, drawn LIVE
+by vanilla shaders.
 
     python shader_sky.py            # writes ../Diamond-SMP-Shader-Sky.zip and the Lite zip, then checks them
     python shader_sky.py --preview  # also renders WebGL previews into ../previews/
@@ -10,20 +11,26 @@ No mods needed. The add-on replaces two of Minecraft's own core shaders:
   on the GPU: the shadow, the photon ring, a thin Novikov-Thorne disk glowing as a
   blackbody with exact Doppler/gravitational redshift and limb darkening, and gas
   streaks that ORBIT in real time (inner gas faster, driven by the game clock).
-  It shows day and night, like the Moon.
+  It belongs to the night: it fades in as the sky darkens at dusk, and in daylight
+  the sky is exactly vanilla's (nothing is traced at all).
 * stars.vsh/fsh normally draws ~1500 white squares. Diamond SMP turns that pass
   into one full-screen layer that paints the real night sky instead: the ~900
   brightest stars of the Yale Bright Star Catalogue at their true places and
   colours, faint stars that crowd into the Milky Way, the Milky Way itself with
   dust lanes and pink nebulae, twinkling and atmospheric extinction near the
   horizon. Every pixel is bent by the hole's gravity (an exact lens table), so the
-  galactic bulge behind it wraps into an Einstein ring. It fades in at dusk and
-  disappears in rain exactly when vanilla's stars would.
+  galactic bulge behind it wraps into an Einstein ring. In our own air, not bent:
+  the northern lights (folded curtains of green oxygen light with red tops and
+  shimmering rays, low in the north) and the odd shooting star. It all fades in at
+  dusk and disappears in rain exactly when vanilla's stars would.
 
 The shaders differ between Minecraft versions, so each zip carries one copy per
-shader layout in pack overlays (1.21.9-1.21.11, 26.1-26.2, 26.3).
+shader layout in pack overlays (1.21.9-1.21.11, 26.1-26.2, 26.3). Each overlay also
+blanks the main pack's painted OptiFine Overworld sky, so a sky mod (OptiFine,
+Skyboxify) does not draw a second sky and a second set of stars over the live one.
 """
 
+import io
 import json
 import math
 import re
@@ -36,6 +43,7 @@ from pathlib import Path
 from string import Template
 
 import numpy as np
+from PIL import Image
 
 import blackhole as bh
 import real_sky
@@ -55,6 +63,10 @@ OPACITY = 2.2
 DISK_KEY = 1.35                            # brightest 0.3% of the disk -> this, before the filmic curve
 FLOW = 9.0                                 # how far the gas orbits per animation cycle
 TIME_SCALE = 150.0                         # animation cycles per Minecraft day (~8 s per cycle)
+# The hole belongs to the night. Visibility follows the luminance of vanilla's sky colour:
+# fully there at or below the first value, gone at or above the second. Vanilla's day sky
+# is 0.62-0.66 in every biome; the dusk sky passes ~0.38 while the first stars come out.
+NIGHT_LUM = (0.14, 0.58)
 
 # Night sky
 LENS_N = 128                               # lens table entries
@@ -70,14 +82,54 @@ HALO = 0.12                                # glare around the brightest stars
 HALO_R = math.radians(0.13)                # glare radius (at most 2 pixels)
 EXTINCTION = (0.10, 0.15, 0.24)            # magnitudes per airmass in red, green, blue (sea level is ~0.1-0.3)
 
+# Northern lights. Each curtain is a thin vertical sheet of light hanging over an east-west
+# line `z` km north of the player that meanders (folds) as it drifts; its sharp lower border
+# is ~100 km up and it reaches ~300 km. A pixel sees the sheet where its ray crosses it, so
+# the altitude there decides the colour, and folds seen edge-on look brighter.
+# Minecraft world: north = -z, east = +x, up = +y.
+AURORA_GREEN = (0.20, 1.00, 0.45)          # oxygen 557.7 nm: the lower, bright part
+AURORA_RED = (1.00, 0.12, 0.18)            # oxygen 630 nm: the highest parts (200-300 km)
+AURORA_PINK = (1.00, 0.20, 0.60)           # nitrogen: a thin fringe on the lower border of active bits
+AURORA_BLUE = (0.42, 0.22, 1.00)           # N2+ 427.8 nm: faint, on sunlit tops
+AURORA_GAIN = 0.09                         # green of a face-on curtain's lower border (linear)
+AURORA_KNEE = 0.35                         # brighter parts saturate softly towards this (linear green)
+AURORA_R_EARTH = 6371.0                    # km: the far curtains sink towards the horizon
+AURORA_RAY_PERIOD = 512                    # ray pattern repeats after this many cells (a power of two)
+# Ray octaves (Lite uses the first): cell along the curtain (km), how far it drifts along the arc
+# per 20-minute day (cells: a whole number of AURORA_RAY_PERIODs), weight
+AURORA_RAYS = [(3.2, AURORA_RAY_PERIOD, 0.55), (11.0, -AURORA_RAY_PERIOD, 0.45)]
+# Curtains, nearest first: distance north (km), lower border (km), brightness, centre and
+# half-width along the arc (km, the curtain fades out towards its ends), a brightness pattern
+# (amount, wavelength km, cycles per 20 min, phase), and folds: (amplitude km, wavelength km,
+# cycles per 20 min (sign: direction of drift), phase); Lite uses the first two. Folds drift
+# through in ~40-170 s.
+AURORA_CURTAINS = [
+    dict(z=270.0, base=104.0, gain=1.0, centre=-60.0, half=900.0, patch=(0.55, 900.0, 5, 0.6),
+         folds=[(32.0, 260.0, 17, 0.3), (45.0, 800.0, 7, 4.1), (9.0, 110.0, -31, 2.0)]),
+    dict(z=450.0, base=106.0, gain=0.85, centre=150.0, half=1700.0, patch=(0.5, 1300.0, -4, 2.2),
+         folds=[(40.0, 340.0, 13, 1.7), (60.0, 1300.0, -5, 0.9), (11.0, 140.0, 23, 5.2)]),
+    dict(z=720.0, base=108.0, gain=0.7, centre=-200.0, half=2900.0, patch=(0.45, 2000.0, 3, 4.4),
+         folds=[(50.0, 450.0, -11, 3.3), (80.0, 1700.0, 6, 2.6), (12.0, 180.0, 19, 0.2)]),
+]
+# Shooting stars, per stream: time slots per 20-minute day (a slot holds at most one meteor),
+# chance of a meteor in a slot. 150 slots of 8 s at 0.3 + 100 of 12 s at 0.3: ~3.75 a minute.
+METEORS = [(150, 0.30), (100, 0.30)]
+
+# The main pack's painted OptiFine Overworld sky layers. A sky mod (OptiFine, Skyboxify) would draw
+# them over the live sky, doubling the stars, so every overlay replaces them with blank images.
+PAINTED_SKY = tuple(f"assets/minecraft/optifine/sky/world0/{name}.png" for name in
+                    ("day", "night", "sunrise", "sunset", "overcast_day", "overcast_night"))
+
 # Two builds: full quality, and a Lite one for integrated graphics.
 QUALITY = {
     "high": dict(zip="Diamond-SMP-Shader-Sky.zip", label="Shader Sky", steps=160, step_k=0.06, layers=2,
                  disk_octaves=4, region=34.0, mag_limit=4.5, faint=True,
-                 octaves=dict(warp=1, thick=1, clouds=4, dust=4, lane=1, neb=2)),
+                 octaves=dict(warp=1, thick=1, clouds=4, dust=4, lane=1, neb=2),
+                 curtains=3, ray_octaves=2, folds=3, aurora_fine=True, meteors=2),
     "lite": dict(zip="Diamond-SMP-Shader-Sky-Lite.zip", label="Shader Sky Lite", steps=80, step_k=0.12,
                  layers=1, disk_octaves=3, region=30.0, mag_limit=4.0, faint=False,
-                 octaves=dict(warp=0, thick=0, clouds=2, dust=2, lane=0, neb=0)),
+                 octaves=dict(warp=0, thick=0, clouds=2, dust=2, lane=0, neb=0),
+                 curtains=2, ray_octaves=1, folds=2, aurora_fine=False, meteors=1),
 }
 
 # (overlay directory, vanilla versions to check against, min_format, max_format, style)
@@ -304,6 +356,8 @@ const int DBH_STEPS = $STEPS;
 const int DBH_LAYERS = $LAYERS;            // noise layers in the gas
 const int DBH_OCT = $DISK_OCT;               // and octaves per layer
 const vec3 DBH_EXT = $EXT;      // atmospheric extinction, magnitudes per airmass (R, G, B)
+const float DBH_NIGHT_LO = $NIGHT_LO;             // sky luminance: hole fully visible below this,
+const float DBH_NIGHT_HI = $NIGHT_HI;             // and gone above this (day)
 const float DBH_LUT_LO = $LUT_LO;
 const float DBH_LUT_HI = $LUT_HI;
 const vec3 DBH_LUT[$LUT_N] = vec3[$LUT_N](
@@ -465,32 +519,40 @@ float dbh_airmass(float y) {
     return 1.0 / (y + 0.025 * exp(-11.0 * y));
 }
 
-// Put the black hole into a vanilla sky colour `base` for world direction `dir`.
+// How much of the hole shows, from vanilla's sky colour (the same over the whole sky):
+// all of it at night, fading in at dusk as the sky darkens, none in daylight. Rain turns
+// the day sky grey; then the clouds hide it too (at night they are dark and it shows).
+float dbh_visibility(vec3 skyColor) {
+    float lum = dot(skyColor, vec3(0.2126, 0.7152, 0.0722));
+    float hi = max(skyColor.r, max(skyColor.g, skyColor.b));
+    float chroma = (hi - min(skyColor.r, min(skyColor.g, skyColor.b))) / max(hi, 1e-4);
+    float overcast = (1.0 - smoothstep(0.22, 0.42, chroma)) * smoothstep(0.03, 0.08, lum);
+    return (1.0 - smoothstep(DBH_NIGHT_LO, DBH_NIGHT_HI, lum)) * (1.0 - overcast);
+}
+
+// Put the black hole into the sky colour `base` (vanilla's, fog included) for world direction
+// `dir`. skyColor: vanilla's sky colour (ColorModulator), which decides whether it is night.
 // t is the animation phase (any real number; only its fractional part matters).
-vec3 dbh_sky(vec3 base, vec3 dir, float t) {
+vec3 dbh_sky(vec3 base, vec3 skyColor, vec3 dir, float t) {
     float cd = dot(dir, DBH_DIR);
     if (cd < DBH_COS_REGION || dir.y <= 0.0) {
         return base;
     }
+    float vis = dbh_visibility(skyColor);
+    if (vis < 0.002) {
+        return base;     // daytime: vanilla's sky exactly, and nothing to trace
+    }
     vec3 sd = normalize(vec3(dot(dir, DBH_SX), dot(dir, DBH_SY), cd));
     vec4 hole = dbh_trace(sd, t);
-    float lum = dot(base, vec3(0.2126, 0.7152, 0.0722));
-    float night = 1.0 - smoothstep(0.06, 0.45, lum);
-    // Rain turns vanilla's day sky grey: then the hole is only a faint glow behind the clouds.
-    float hi = max(base.r, max(base.g, base.b));
-    float chroma = (hi - min(base.r, min(base.g, base.b))) / max(hi, 1e-4);
-    float overcast = (1.0 - smoothstep(0.22, 0.42, chroma)) * smoothstep(0.03, 0.08, lum);
-    // Air dims and reddens the hole low in the sky; by day it is fainter against the
-    // bright blue, like the Moon in daylight.
+    // Air dims and reddens the hole low in the sky.
     vec3 air = exp2(-1.328771 * DBH_EXT * (dbh_airmass(dir.y) - 1.0));
-    vec3 disk = dbh_srgb(dbh_aces(hole.rgb * air * DBH_EXPOSURE * mix(0.55, 1.0, night)));
+    vec3 disk = dbh_srgb(dbh_aces(hole.rgb * air * DBH_EXPOSURE));
     // A soft glow of disk light scattered by the air around the hole.
     float ang = acos(clamp(cd, -1.0, 1.0));
-    disk += air * vec3(0.80, 0.88, 1.0) * (0.10 * exp(-ang / 0.10) + 0.04 * exp(-ang / 0.30)) * mix(0.35, 1.0, night);
-    // At night the shadow is pitch black; by day the air in front of it fills it in.
-    base *= 1.0 - 0.85 * hole.a * night;
-    disk *= smoothstep(DBH_COS_REGION, DBH_COS_REGION + 0.03, cd) * smoothstep(0.0, 0.035, dir.y)
-          * (1.0 - 0.8 * overcast);
+    disk += air * vec3(0.80, 0.88, 1.0) * (0.10 * exp(-ang / 0.10) + 0.04 * exp(-ang / 0.30));
+    // The shadow is pitch black at night; at dusk the air in front of it still glows.
+    base *= 1.0 - hole.a * vis;
+    disk *= vis * smoothstep(DBH_COS_REGION, DBH_COS_REGION + 0.03, cd) * smoothstep(0.0, 0.035, dir.y);
     return 1.0 - (1.0 - base) * (1.0 - clamp(disk, 0.0, 1.0));
 }
 
@@ -553,6 +615,41 @@ const float DSF_BB_LO = $BB_LO;
 const float DSF_BB_HI = $BB_HI;
 const vec3 DSF_BB[$BB_N] = vec3[$BB_N](
     $BB
+);
+// Northern lights: $AU_N curtains (see shader_sky.py for the model). Distances in km.
+const int DSF_AU_N = $AU_N;
+const int DSF_AU_RAYS = $AU_RAYS;                    // ray octaves
+const int DSF_AU_FOLDS = $AU_FOLDS;                   // folds per curtain
+const bool DSF_AU_FINE = $AU_FINE;               // pink lower fringe and blue tops
+const int DSF_AU_PERIOD = $AU_PERIOD;                // ray cells before the ray pattern repeats
+const float DSF_AU_2R = $AU_2R;            // twice the Earth's radius
+const float DSF_AU_GAIN = $AU_GAIN;
+const float DSF_AU_KNEE = $AU_KNEE;            // soft limit for the brightest parts (linear green)
+const vec3 DSF_AU_GREEN = $AU_GREEN;
+const vec3 DSF_AU_RED = $AU_RED;
+const vec3 DSF_AU_PINK = $AU_PINK;
+const vec3 DSF_AU_BLUE = $AU_BLUE;
+// per octave: ray cell (km), drift (cells per 20 min), weight
+const vec3 DSF_AU_RAY[$AU_RAYS] = vec3[$AU_RAYS](
+    $AU_RAY
+);
+// per curtain: distance north, lower border, brightness, hash seed
+const vec4 DSF_AU_C[$AU_LEN] = vec4[$AU_LEN](
+    $AU_C
+);
+// per curtain: centre along the arc, 1 / half-width; brightness pattern: amount, wavenumber
+const vec4 DSF_AU_W[$AU_LEN] = vec4[$AU_LEN](
+    $AU_W
+);
+// per curtain, 3 folds (the first DSF_AU_FOLDS are used) and then the brightness pattern's timing:
+// amplitude, wavenumber (rad/km), cycles per 20 min (whole numbers: no jump when GameTime wraps), phase
+const vec4 DSF_AU_F[$AU_NF] = vec4[$AU_NF](
+    $AU_F
+);
+// Shooting stars, per stream: time slots per 20 min, chance of a meteor per slot, seed
+const int DSF_MET_N = $MET_N;
+const vec3 DSF_MET[$MET_LEN] = vec3[$MET_LEN](
+    $MET
 );
 
 float dsf_time(float gameTime) {
@@ -793,36 +890,201 @@ vec3 dsf_faint_stars(vec3 src, vec3 eRad, vec3 eTan, float kRad, float kTan, flo
     return acc;
 }
 
+// One ray cell of an aurora curtain: brightness 0..1 that flickers in 1.3-3 s, with whole cycles
+// per 20 min. Cells repeat every DSF_AU_PERIOD (a power of two), so the drift has no jump either.
+float dsf_au_cell(int i, float t, float seed) {
+    float p = fract((float(i & (DSF_AU_PERIOD - 1)) + seed) * 0.1031);   // a cheap 1-D hash
+    p *= p + 33.33;
+    p *= p + p;
+    float a = fract(p);
+    float cycles = 400.0 + 2.0 * floor(fract(a * 251.37 + 0.13) * 256.0);
+    float phase = fract(a * 7919.31);
+    return a * a * (0.6 + 0.4 * sin(6.2831853 * (cycles * t + phase)));
+}
+
+// Field-aligned rays along a curtain, x km along the arc: smooth noise whose cells drift and
+// flicker. Ray cells smaller than a few pixels (onSky: radians per km) wash out to their mean.
+float dsf_au_rays(float x, float t, float seed, float onSky, float px) {
+    float r = 0.0;
+    for (int o = 0; o < DSF_AU_RAYS; o++) {
+        vec3 ray = DSF_AU_RAY[o];
+        float u = x / ray.x + ray.y * t;
+        float i = floor(u);
+        float f = u - i;
+        f = f * f * (3.0 - 2.0 * f);
+        int ii = int(i);
+        float s = seed + 1024.0 * float(o);
+        float v = mix(dsf_au_cell(ii, t, s), dsf_au_cell(ii + 1, t, s), f);
+        r += ray.z * mix(0.32, v, smoothstep(1.5 * px, 4.0 * px, onSky * ray.x));
+    }
+    return r;
+}
+
+// The northern lights (linear light) in world direction d. Curtains hang over east-west lines
+// north of the player that fold and drift; a pixel sees a curtain where its ray crosses it, so
+// the altitude there gives the colour: a sharp green lower border ~100 km up, rays fading upward
+// into red tops at 200-300 km. Seen edge-on (folds) a sheet looks brighter.
+vec3 dsf_aurora(vec3 d, float px, float t) {
+    float north = -d.z;
+    if (DSF_AU_N == 0 || d.y < -0.02 || d.y > 0.9 || north < 0.2 * abs(d.x) + 0.02) {
+        return vec3(0.0);      // the aurora's part of the sky: north, within ~75 degrees, below ~64 up
+    }
+    float hl = length(d.xz);
+    float tanEl = max(d.y, 0.0) / hl;
+    float tanAz = d.x / north;                 // azimuth, east of north
+    float cosAz = north / hl;
+    float env = 1.0 - smoothstep(0.9, 3.2, abs(tanAz));
+    float tau = 6.2831853 * t;
+    // a faint diffuse glow low over the northern horizon, where the far arcs crowd together
+    vec3 col = (0.10 * env * exp(-tanEl / 0.12)) * DSF_AU_GREEN;
+    for (int c = 0; c < DSF_AU_N; c++) {
+        vec4 cur = DSF_AU_C[c];                // distance north, lower border, brightness, seed
+        vec4 win = DSF_AU_W[c];
+        float x = cur.x * tanAz;               // km along the arc
+        float w = (x - win.x) * win.y;
+        float e = env * max(1.0 - w * w, 0.0);
+        if (e <= 0.0) {
+            continue;
+        }
+        // folds: the curtain is z = cur.x + f(x), drifting sideways (folds that would look
+        // narrower than ~4 degrees, far off to the side, are smoothed away)
+        float onSky = cosAz * cosAz * hl / cur.x;      // angle on the sky per km along the arc
+        float f = 0.0;
+        float fp = 0.0;
+        float edge = 0.0;
+        for (int k = 0; k < DSF_AU_FOLDS; k++) {
+            vec4 s = DSF_AU_F[4 * c + k];      // amplitude, wavenumber, cycles per 20 min, phase
+            float a = s.y * x + s.z * tau + s.w;
+            float ca = cos(a);
+            float amp = s.x * smoothstep(0.035, 0.09, onSky / s.y);
+            f += amp * sin(a);
+            fp += amp * s.y * ca;
+            if (k == 0) {
+                edge = ca * ca;
+            }
+        }
+        float z = cur.x + f;
+        float dist = z / cosAz;                // along the ground to the curtain
+        float dh = dist * (tanEl + dist / DSF_AU_2R) - cur.y;   // height above its lower border
+        if (dh < -12.0 || dh > 230.0) {
+            continue;
+        }
+        // seen nearly edge-on a sheet glows brighter (longer path through it); the main folds
+        // turn edge-on in narrow bands where they are steepest
+        float g = fp * cur.x / (cosAz * cosAz * z) + tanAz;
+        float path = sqrt(1.0 + g * g);
+        path *= inversesqrt(1.0 + path * path * 0.04);
+        edge *= edge;
+        edge *= edge;
+        path *= 1.0 + 1.2 * edge;
+        float r = dsf_au_rays(x, t, cur.w, onSky, px);
+        // bright and faint stretches along the arc, slowly changing
+        vec4 ps = DSF_AU_F[4 * c + 3];
+        float act = 0.5 + 0.5 * sin(win.w * x + ps.z * tau + ps.w);
+        float bright = 1.0 + win.z * (3.0 * act * act - 1.0);
+        float ray = 3.0 * r * r;               // 0..3, mostly dim with a few bright rays
+        dh += 1.5 * ray;                       // brighter rays reach a little lower
+        float scale = 24.0 + 36.0 * min(ray, 2.0);   // and higher
+        float green = smoothstep(-2.5, 1.0, dh) * ((0.22 + ray) * exp(-dh / scale)
+                                                   + (0.8 + 0.4 * ray) * exp(-dh / 6.0));
+        float red = smoothstep(70.0, 165.0, dh) * exp(-max(dh - 170.0, 0.0) / 45.0) * (0.022 + 0.16 * ray);
+        vec3 light = green * DSF_AU_GREEN + red * DSF_AU_RED;
+        if (DSF_AU_FINE) {
+            float blue = smoothstep(120.0, 200.0, dh) * (0.005 + 0.01 * ray);
+            float pink = exp(-((dh + 0.5) * (dh + 0.5)) * 0.5) * max(bright - 1.3, 0.0) * (0.8 + 0.5 * ray);
+            light += blue * DSF_AU_BLUE + pink * DSF_AU_PINK;
+        }
+        col += (e * cur.z * bright * path * (1.0 - smoothstep(165.0, 225.0, dh))) * light;
+    }
+    // the brightest folds saturate softly, so the aurora never outshines the night
+    col *= DSF_AU_GAIN;
+    return col / (1.0 + col.g / DSF_AU_KNEE);
+}
+
+// Shooting stars (linear light): each time slot of a stream may hold one meteor, a short
+// streak 0.3-1 s long with a fading tail, from a hashed start point and direction.
+vec3 dsf_meteors(vec3 d, float px, float t) {
+    vec3 acc = vec3(0.0);
+    for (int j = 0; j < DSF_MET_N; j++) {
+        vec3 m = DSF_MET[j];
+        float s = t * m.x;
+        float slot = floor(s);
+        uint h = dsf_pcg(uint(slot) * 2654435761u + uint(m.z));
+        if (dsf_u01(h) > m.y) {
+            continue;
+        }
+        float slotLen = 1200.0 / m.x;                      // seconds
+        uint h2 = dsf_pcg(h);
+        uint h3 = dsf_pcg(h2);
+        uint h4 = dsf_pcg(h3);
+        uint h5 = dsf_pcg(h4);
+        float dur = 0.3 + 0.7 * dsf_u01(h2);
+        float q = ((s - slot) * slotLen - dsf_u01(h3) * (slotLen - dur)) / dur;   // 0..1 while it burns
+        if (q <= 0.0 || q >= 1.0) {
+            continue;
+        }
+        float az = 6.2831853 * dsf_u01(h4);
+        float el = 0.3 + 0.9 * dsf_u01(h5);
+        vec3 hor = vec3(sin(az), 0.0, -cos(az));
+        vec3 p0 = cos(el) * hor + vec3(0.0, sin(el), 0.0);
+        vec3 up = vec3(0.0, cos(el), 0.0) - sin(el) * hor;     // towards the zenith, on the sky
+        vec3 side = vec3(cos(az), 0.0, sin(az));
+        uint h6 = dsf_pcg(h5);
+        float dirAng = 3.1415927 + 2.6 * (dsf_u01(h6) - 0.5);   // mostly downwards
+        vec3 dir = cos(dirAng) * up + sin(dirAng) * side;
+        float len = 0.18 + 0.32 * dsf_u01(dsf_pcg(h6));         // 10-29 degrees in all
+        // gnomonic projection around the start point: the path is a straight line there
+        float c0 = dot(d, p0);
+        if (c0 < 0.8) {
+            continue;
+        }
+        vec3 p = d / c0 - p0;
+        float along = dot(p, dir);
+        float across = dot(p, cross(p0, dir));
+        float head = tan(len * q);
+        float tail = tan(max(len * q - 0.5 * len, 0.0));
+        float da = along - clamp(along, tail, head);
+        float sigma = max(0.9 * px, 4e-4);
+        float core = exp(-(da * da + across * across) / (2.0 * sigma * sigma));
+        float fade = clamp((along - tail) / max(head - tail, 1e-5), 0.0, 1.0);
+        float b = smoothstep(0.0, 0.12, q) * (1.0 - smoothstep(0.7, 1.0, q)) * (0.6 + 0.6 * q);
+        acc += vec3(0.85, 1.0, 0.88) * (b * core * (0.1 + 2.6 * fade * fade));
+    }
+    return acc;
+}
+
 // The night sky (display colour, to be added on top of the vanilla sky) for the world
 // direction d. px: angular size of a pixel; t: dsf_time(GameTime).
 vec3 dsf_night_sky(vec3 d, float px, float t) {
     if (d.y < -0.02) {
         return vec3(0.0);      // below the horizon
     }
+    // The aurora and meteors are in our own air: the hole does not bend them.
+    vec3 light = dsf_aurora(d, px, t) + dsf_meteors(d, px, t);
     vec3 src;
     vec3 eRad;
     vec3 eTan;
     float kRad;
     float kTan;
     float theta;
-    if (!dsf_lens(d, src, eRad, eTan, kRad, kTan, theta)) {
-        return vec3(0.0);      // the shadow: no light comes from in there
+    // In the shadow no light comes from beyond.
+    if (dsf_lens(d, src, eRad, eTan, kRad, kTan, theta)) {
+        float sigma = 0.7 * max(px, 1e-5);
+        float inv2s2 = 0.5 / (sigma * sigma);
+        float mu = min(kRad * kTan, 25.0);    // lensing magnification of point sources
+        float tw = 0.10 + 0.32 * (1.0 - smoothstep(0.0, 0.5, max(d.y, 0.0)));   // more twinkling low down
+        float absLat;
+        vec3 sky = DSF_MW_GAIN * dsf_galaxy(src, absLat);
+        vec3 stars = dsf_bright_stars(src, eRad, eTan, kRad, kTan, inv2s2, 1.0 / min(2.0 * px, DSF_HALO_R), t, tw);
+        if (DSF_FAINT) {
+            stars += dsf_faint_stars(src, eRad, eTan, kRad, kTan, inv2s2, t, tw, absLat);
+        }
+        light += (sky + stars * mu) * smoothstep(DSF_TH_SH, DSF_TH_SH + 1.5 * px, theta);
     }
-    float sigma = 0.7 * max(px, 1e-5);
-    float inv2s2 = 0.5 / (sigma * sigma);
-    float mu = min(kRad * kTan, 25.0);    // lensing magnification of point sources
     float alt = max(d.y, 0.0);
-    float tw = 0.10 + 0.32 * (1.0 - smoothstep(0.0, 0.5, alt));   // more twinkling low down
-    float absLat;
-    vec3 light = DSF_MW_GAIN * dsf_galaxy(src, absLat);
-    vec3 stars = dsf_bright_stars(src, eRad, eTan, kRad, kTan, inv2s2, 1.0 / min(2.0 * px, DSF_HALO_R), t, tw);
-    if (DSF_FAINT) {
-        stars += dsf_faint_stars(src, eRad, eTan, kRad, kTan, inv2s2, t, tw, absLat);
-    }
-    light += stars * mu;
     float air = 1.0 / (alt + 0.025 * exp(-11.0 * alt));
     light *= exp2(-1.328771 * DSF_EXT * (air - 1.0));   // extinction: dimmer and redder low down
-    light *= smoothstep(-0.02, 0.01, d.y) * smoothstep(DSF_TH_SH, DSF_TH_SH + 1.5 * px, theta);
+    light *= smoothstep(-0.02, 0.01, d.y);
     return dsf_srgb(1.0 - exp(-light));
 }
 
@@ -840,7 +1102,7 @@ def include_blackhole(quality="high"):
         FPEAK=_fl((36 / 49) ** 0.75 * (1 / 7) ** 0.25), EXPOSURE=_fl(_exposure()),
         COS_REGION=_fl(math.cos(math.radians(q["region"]))), STEPK=_fl(q["step_k"]), RESC=_fl(1.1 * R_OUT),
         FLOW=_fl(FLOW), STEPS=q["steps"], LAYERS=q["layers"], DISK_OCT=q["disk_octaves"], EXT=_vec(EXTINCTION),
-        LUT_LO=_fl(math.log(t_lo)), LUT_HI=_fl(math.log(t_hi)), LUT_N=len(lut), LUT_LAST=_fl(len(lut) - 1),
+        NIGHT_LO=_fl(NIGHT_LUM[0]), NIGHT_HI=_fl(NIGHT_LUM[1]), LUT_LO=_fl(math.log(t_lo)), LUT_HI=_fl(math.log(t_hi)), LUT_N=len(lut), LUT_LAST=_fl(len(lut) - 1),
         LUT=",\n    ".join(_vec(c) for c in lut), TIME_SCALE=_fl(TIME_SCALE))
 
 
@@ -854,6 +1116,91 @@ def _rows(items, per_line):
     return ",\n    ".join(", ".join(items[i:i + per_line]) for i in range(0, len(items), per_line))
 
 
+def _glsl_vec(v):
+    return f"vec{len(v)}(" + ", ".join(_fl(x) for x in v) + ")"
+
+
+def aurora_constants(quality="high"):
+    """Template values for the aurora and meteor constants of diamond_starfield.glsl.
+    (Arrays always get at least one entry: GLSL has no empty arrays.)"""
+    q = QUALITY[quality]
+    curtains = AURORA_CURTAINS[:q["curtains"]]
+    rays = AURORA_RAYS[:max(q["ray_octaves"], 1)]
+    total = sum(wt for _, _, wt in rays)
+    rays = [(cell, drift, wt / total) for cell, drift, wt in rays]
+    assert AURORA_RAY_PERIOD & (AURORA_RAY_PERIOD - 1) == 0, "the ray period must be a power of two"
+    for _, drift, _ in rays:
+        assert drift % AURORA_RAY_PERIOD == 0, "the ray drift must wrap with GameTime"
+    cur, win, folds = [], [], []
+    for k, c in enumerate(curtains):
+        amount, wavelength, cycles, phase = c["patch"]
+        cur.append((c["z"], c["base"], c["gain"], 3072 * (k + 1)))
+        win.append((c["centre"], 1.0 / c["half"], amount, 2 * math.pi / wavelength))
+        for amp, wl, n, ph in c["folds"]:
+            assert n == int(n), "whole cycles per 20 minutes, or the folds jump when GameTime wraps"
+            folds.append((amp, 2 * math.pi / wl, n, ph))
+        assert cycles == int(cycles)
+        folds.append((0.0, 0.0, cycles, phase))
+    if not curtains:
+        cur, win, folds = [(1.0, 0.0, 0.0, 0.0)], [(0.0, 1.0, 0.0, 0.0)], [(0.0, 0.0, 0.0, 0.0)] * 4
+    streams = _meteor_streams(quality)
+    for slots, _, _ in streams:
+        assert slots == int(slots), "whole time slots per 20 minutes, or meteors jump when GameTime wraps"
+    met = streams or [(1, 0.0, 0)]
+    return dict(
+        AU_N=len(curtains), AU_LEN=len(cur), AU_RAYS=len(rays), AU_FOLDS=q["folds"],
+        AU_FINE="true" if q["aurora_fine"] else "false", AU_PERIOD=AURORA_RAY_PERIOD,
+        AU_2R=_fl(2 * AURORA_R_EARTH), AU_GAIN=_fl(AURORA_GAIN), AU_KNEE=_fl(AURORA_KNEE),
+        AU_GREEN=_vec(AURORA_GREEN), AU_RED=_vec(AURORA_RED), AU_PINK=_vec(AURORA_PINK), AU_BLUE=_vec(AURORA_BLUE),
+        AU_RAY=_rows((_glsl_vec(r) for r in rays), 2), AU_C=_rows((_glsl_vec(c) for c in cur), 1),
+        AU_W=_rows((_glsl_vec(w) for w in win), 1), AU_NF=len(folds), AU_F=_rows((_glsl_vec(f) for f in folds), 2),
+        MET_N=len(streams), MET_LEN=len(met), MET=_rows((_glsl_vec(m) for m in met), 2))
+
+
+def _pcg(v):
+    """dsf_pcg() on uint32."""
+    s = (int(v) * 747796405 + 2891336453) & 0xFFFFFFFF
+    w = (((s >> ((s >> 28) + 4)) ^ s) * 277803737) & 0xFFFFFFFF
+    return ((w >> 22) ^ w) & 0xFFFFFFFF
+
+
+def _u01(h):
+    return (h >> 8) / 16777216.0
+
+
+def meteor_schedule(quality="high"):
+    """Every shooting star of one 20-minute day, as dsf_meteors() draws them: GameTime when it
+    lights up, duration (s), start direction, direction of travel and path length (radians)."""
+    out = []
+    for j, (slots, p, seed) in enumerate(_meteor_streams(quality)):
+        slot_len = 1200.0 / slots
+        for slot in range(slots):
+            h = _pcg((slot * 2654435761 + seed) & 0xFFFFFFFF)
+            if _u01(h) > p:
+                continue
+            h2 = _pcg(h)
+            h3 = _pcg(h2)
+            h4 = _pcg(h3)
+            h5 = _pcg(h4)
+            h6 = _pcg(h5)
+            dur = 0.3 + 0.7 * _u01(h2)
+            start = _u01(h3) * (slot_len - dur)
+            az, el = 2 * math.pi * _u01(h4), 0.3 + 0.9 * _u01(h5)
+            hor = np.array([math.sin(az), 0.0, -math.cos(az)])
+            p0 = math.cos(el) * hor + np.array([0.0, math.sin(el), 0.0])
+            up = np.array([0.0, math.cos(el), 0.0]) - math.sin(el) * hor
+            side = np.array([math.cos(az), 0.0, math.sin(az)])
+            ang = math.pi + 2.6 * (_u01(h6) - 0.5)
+            out.append(dict(stream=j, time=(slot + start / slot_len) / slots, duration=dur, start=p0,
+                            direction=math.cos(ang) * up + math.sin(ang) * side,
+                            length=0.18 + 0.32 * _u01(_pcg(h6))))
+    return sorted(out, key=lambda m: m["time"])
+
+
+def _meteor_streams(quality):
+    return [(slots, p, 7777 * (j + 1)) for j, (slots, p) in enumerate(METEORS[:QUALITY[quality]["meteors"]])]
+
+
 def include_starfield(quality="high"):
     q = QUALITY[quality]
     th_sh, x0, x1, psi, dpsi = lens_table()
@@ -864,6 +1211,8 @@ def include_starfield(quality="high"):
     o = q["octaves"]
     stars = ("vec4(" + ", ".join(_fl(v) for v in e) + ")" for e in entries)
     return STARFIELD_GLSL.substitute(
+        **aurora_constants(quality),
+
         QUALITY=quality, MAG_LIMIT=_fl(q["mag_limit"]), H=_vec(BH_DIR), PERP0=_vec(perp0),
         GN=_vec(gn), GC=_vec(gc), GS=_vec(gs), TH_SH=_fl(th_sh), LX0=_fl(x0), LX1=_fl(x1), LN=len(psi),
         PSI=_rows((_fl(v) for v in psi), 8), DPSI=_rows((_fl(v) for v in dpsi), 8),
@@ -922,7 +1271,7 @@ void main() {
     vec4 sky = apply_fog(ColorModulator, sphericalVertexDistance, cylindricalVertexDistance, 0.0, FogSkyEnd, FogSkyEnd, FogSkyEnd, FogColor);
     // Thick fog (water, lava, powder snow) hides the hole; ordinary distance fog does not.
     float clear = smoothstep(0.2, 0.8, 1.0 - 16.0 * FogColor.a / max(FogSkyEnd, 0.001));
-    vec3 color = mix(sky.rgb, dbh_sky(sky.rgb, normalize(skyPos), dbh_time(GameTime)), clear);
+    vec3 color = mix(sky.rgb, dbh_sky(sky.rgb, ColorModulator.rgb, normalize(skyPos), dbh_time(GameTime)), clear);
     fragColor = vec4(color, sky.a);
 }
 """
@@ -988,7 +1337,16 @@ def stage_source(template, style):
 
 
 @lru_cache(maxsize=None)
+def blank_sky_png():
+    """A tiny fully transparent OptiFine sky image (3 x 2 faces of 2 x 2 pixels)."""
+    buf = io.BytesIO()
+    Image.new("RGBA", (6, 4), (0, 0, 0, 0)).save(buf, "PNG", optimize=True)
+    return buf.getvalue()
+
+
+@lru_cache(maxsize=None)
 def overlay_files(quality="high"):
+    """Every file of every overlay: shader sources (str) and the blank painted-sky images (bytes)."""
     sky_inc, star_inc = include_blackhole(quality), include_starfield(quality)
     files = {}
     for d, _, _, _, style in VARIANTS:
@@ -998,6 +1356,8 @@ def overlay_files(quality="high"):
         files[f"{d}/{SHADERS}/core/stars.fsh"] = stage_source(STARS_FSH, style)
         files[f"{d}/{SHADERS}/include/diamond_blackhole.glsl"] = sky_inc
         files[f"{d}/{SHADERS}/include/diamond_starfield.glsl"] = star_inc
+        for path in PAINTED_SKY:
+            files[f"{d}/{path}"] = blank_sky_png()
     return files
 
 
@@ -1080,7 +1440,7 @@ def build_addon(quality="high", icon=None):
                 "",
                 {"text": "Diamond SMP ", "color": "aqua", "bold": True},
                 {"text": q["label"], "color": "light_purple"},
-                {"text": "\nLive black hole + real stars • no mods • 1.21.9+", "color": "gray"},
+                {"text": "\nNight black hole, real stars, aurora • no mods • 1.21.9+", "color": "gray"},
             ],
             "min_format": MIN_FORMAT,
             "max_format": MAX_FORMAT,
@@ -1092,8 +1452,8 @@ def build_addon(quality="high", icon=None):
         z.writestr("pack.mcmeta", json.dumps(meta, indent=2, ensure_ascii=False) + "\n")
         if icon is not None and Path(icon).exists():
             z.write(icon, "pack.png")
-        for name, text in sorted(overlay_files(quality).items()):
-            z.writestr(name, text)
+        for name, data in sorted(overlay_files(quality).items()):
+            z.writestr(name, data)      # str (shaders) or bytes (images)
     print(f"wrote {out.name} ({out.stat().st_size / 1e3:.1f} kB)")
     return out
 
