@@ -5,12 +5,14 @@
     python build_pack.py --quick    # low-res draft
 
 Everything in the pack is generated from scratch by this script: the skies are
-ray traced through a physical black hole (blackhole.py) and lit by a physical
+ray traced through a physical black hole (kerr.py) and lit by a physical
 atmosphere (atmosphere.py); the logo and icon are drawn in code. Block, item
 and mob textures are left vanilla on purpose.
 
 The OptiFine sky is a set of layers that cross-fade over the Minecraft day:
-night (space), sunrise, day, sunset, plus overcast versions for rain.
+night (space: the black hole, the real stars, the Milky Way and the northern
+lights), sunrise, day and sunset (the clean physical sky, no black hole), plus
+overcast versions for rain. The hole fades in at dusk with the night layer.
 """
 
 import argparse
@@ -30,6 +32,7 @@ from PIL import Image, ImageFilter
 import atmosphere as atm
 import blackhole as bh
 import celestial
+import earth
 import kerr
 import real_sky
 
@@ -221,13 +224,277 @@ def airglow(dirs):
     return (0.0025 / (s + 0.12))[..., None] * np.array([0.45, 0.75, 0.40])
 
 
-def overworld_layers(face, ss, pad, galaxy, log_prefix="  "):
-    """Night / sunrise / day / sunset / overcast skies for the Overworld (OptiFine 3x2)."""
-    scene = kerr.KerrScene(background=galaxy, **OVERWORLD)
-    w2s = bh.world_to_scene(OVERWORLD_DIR)
-    em = Emitter(scene, w2s)
-    e_disk = DISK_KEY / em.p997
+# ---------------------------------------------------------------------------
+# Northern lights (aurora borealis) in the night sky
+# ---------------------------------------------------------------------------
+#
+# The aurora is light given off 100-300 km up by oxygen atoms and nitrogen molecules
+# hit by electrons that rain down along the magnetic field lines. It is modelled as a
+# few thin emitting sheets ("curtains") hanging over the ground far to the north:
+#
+# * Geometry: each curtain runs east-west at a distance d north of the player, bends
+#   away along the auroral oval, meanders, and folds back over itself where its
+#   fold steepness kappa * amplitude > 1 (Kelvin-Helmholtz-like S-folds). Across the
+#   sheet the emission is a Gaussian a few km thick. Field lines are nearly vertical
+#   at auroral latitudes, so the sheets are vertical. A view ray sees the line integral
+#   of the emission through every sheet it crosses, so a fold seen edge-on glows
+#   brightest, as in photographs. Points are placed on a curved Earth, which makes the
+#   far ends of every arc sink smoothly into the horizon. The display spans ~140 degrees
+#   of the northern sky, its lower borders 5-30 degrees up and its tops up to ~60.
+# * Fine rays: across the sheet the brightness is broken into strands 1-5 km wide (a
+#   few tenths of a degree seen from the ground) that run along the field lines; each
+#   strand reaches its own height.
+# * Colour comes from the altitude: the O 557.7 nm green starts at a sharp lower border
+#   about 100 km up and fades upwards; the O 630.0 nm red takes over at 200-300 km
+#   (its 110 s lifetime smears it, so it does not show the fine rays); a trace of N2+
+#   427.8 nm violet on the sunlit tops; on some stretches a thin pink/magenta N2 fringe
+#   just under the lower border, where the electrons are most energetic.
+#
+# Rendering: for every azimuth column the horizontal line of sight is marched once and
+# the stretches where it crosses a sheet are stored as short chunks (distance, weights,
+# local border height). A pixel at elevation e then sums its column's chunks, each one
+# seen at height h(r, e) on the curved Earth, with path length 1 / cos(e) through the
+# vertical sheet. The result is linear radiance, added in front of the stars before
+# atmospheric extinction and tone mapping.
 
+AURORA_GREEN = np.array([0.20, 1.00, 0.45])    # O(1S) 557.7 nm
+AURORA_RED = np.array([1.00, 0.12, 0.18])      # O(1D) 630.0 nm
+AURORA_VIOLET = np.array([0.45, 0.22, 1.00])   # N2+ 427.8 nm, resonance-scattered sunlight on the tops
+AURORA_PINK = np.array([1.00, 0.32, 0.72])     # N2 first positive (red) + N2+ (blue) lower-border fringe
+AURORA_GAIN = 0.24       # radiance scale (pre-tonemap): a brightness-1 curtain seen face-on at its border
+AURORA_SAT = 0.20        # soft ceiling of the green (pre-tonemap): edge-on folds stay below ~0.5 on screen
+AURORA_SIGMA = 1.4       # sheet half-thickness (Gaussian sigma, km)
+AURORA_DR = 0.35         # march step along the line of sight (km)
+AURORA_CHUNK = 1.2       # longest stretch of a crossing stored as one chunk (km)
+AURORA_R = (40.0, 2150.0)   # range of horizontal distances marched (km); beyond, 300 km is below the horizon
+AURORA_AZ = 100.0        # columns cover azimuths -100..100 degrees (north = 0, east > 0)
+AURORA_SPAN = (50.0, 76.0)  # the display fades out between these azimuths (east and west of north)
+AURORA_MAX_CHUNKS = 512    # per column; the busiest columns (edge-on folds) need ~300
+R_EARTH_KM = 6371.0
+OBSERVER_KM = 0.2
+
+# One row per curtain: distance north d (km), arc centre x0 (km east), half length (km),
+# brightness, oval radius (km), meander amplitude / wavelength (km), fold amplitude /
+# wavelength (km), fold steepness kappa (1/km), curl amplitude / wavelength (km),
+# lower border height (km), fringe (0..1, how much pink fringe), seed.
+AURORA_CURTAINS = np.array([
+    #  d     x0    half   bright oval    mea  mwl    fold  fwl   kappa  curl cwl  h0     fringe seed
+    [235., -150., 900., 0.50, 4500., 55., 900., 65., 380., 0.021, 2.0, 26., 104.0, 0.0, 11.],
+    [330., 60., 1400., 1.00, 6000., 70., 1100., 85., 430., 0.017, 2.6, 34., 99.0, 1.0, 12.],
+    [480., -60., 1500., 0.65, 8000., 60., 1000., 60., 400., 0.020, 2.6, 40., 100.0, 0.5, 13.],
+    [650., 160., 1600., 0.42, 10000., 45., 1000., 40., 420., 0.022, 2.4, 44., 102.0, 0.0, 14.],
+])
+
+
+@njit(inline="always")
+def _hash1(i, seed):
+    h = (i * 374761393 + seed * 668265263) & 0xFFFFFFFF
+    h = ((h ^ (h >> 13)) * 1274126177) & 0xFFFFFFFF
+    h = h ^ (h >> 16)
+    return (h & 0xFFFFFF) / 16777215.0
+
+
+@njit(inline="always")
+def _noise1(x, seed):
+    """Smooth 1D value noise in [0, 1] (quintic fade, so the curtains have no kinks)."""
+    i = math.floor(x)
+    t = x - i
+    t = t * t * t * (t * (t * 6 - 15) + 10)
+    i = int(i)
+    a = _hash1(i, seed)
+    return a + (_hash1(i + 1, seed) - a) * t
+
+
+@njit(inline="always")
+def _curtain_field(c, x, n):
+    """Implicit curtain: F(x, n) = 0 on the sheet (x km east, n km north). Also returns
+    the along-sheet coordinate u (km), which follows the sheet through its folds."""
+    seed = int(c[14])
+    m = c[0] + x * x / (2.0 * c[4]) + c[5] * (2.0 * _noise1(x / c[6], seed) - 1.0)
+    y = n - m
+    # the fold amplitude waxes and wanes along the arc: some stretches fold, some are smooth
+    amp = c[7] * (0.25 + 1.1 * _noise1(x / (1.7 * c[8]) + 3.1, seed + 1))
+    k = 2.0 * math.pi / c[8]
+    theta = k * x + 6.2831853 * _noise1(x / 900.0, seed + 2) + c[9] * y
+    f = y - amp * math.sin(theta) - c[10] * math.sin(2.0 * math.pi * x / c[11] + 1.3 * seed)
+    return f, theta / k
+
+
+@njit(inline="always")
+def _aurora_flush(out, ci, nch, wsum, wr, wf, wd, wh0, whg, wfr):
+    if wsum > 0.0 and nch < out.shape[1]:
+        out[ci, nch, 0] = wr / wsum
+        out[ci, nch, 1] = wf
+        out[ci, nch, 2] = wd
+        out[ci, nch, 3] = wh0 / wsum
+        out[ci, nch, 4] = whg / wsum
+        out[ci, nch, 5] = wfr / wsum
+        return nch + 1
+    return nch
+
+
+@njit(parallel=True)
+def _aurora_columns(az, curt, r0, r1, dr, chunk, sigma, span0, span1, out, count):
+    """March the horizontal line of sight of every azimuth column through the curtains."""
+    norm = 1.0 / (math.sqrt(2.0 * math.pi) * sigma)
+    cut = 3.2 * sigma
+    eps = 0.02
+    for ci in prange(az.shape[0]):
+        sa, ca = math.sin(az[ci]), math.cos(az[ci])
+        # this display spans ~140 degrees of the northern sky and fades out softly at its sides
+        aw = min(max((span1 - abs(math.degrees(az[ci]))) / (span1 - span0), 0.0), 1.0)
+        aw = aw * aw * (3.0 - 2.0 * aw)
+        if aw <= 0.0:
+            count[ci] = 0
+            continue
+        nch = 0
+        for k in range(curt.shape[0]):
+            c = curt[k]
+            seed = int(c[14])
+            wsum = wr = wf = wd = wh0 = whg = wfr = 0.0
+            start = -1.0
+            r = r0
+            while r < r1:
+                x, n = r * sa, r * ca
+                f, u = _curtain_field(c, x, n)
+                inside = False
+                if abs(f) < 6.0 * cut:
+                    fx = (_curtain_field(c, x + eps, n)[0] - f) / eps
+                    fn = (_curtain_field(c, x, n + eps)[0] - f) / eps
+                    s = f / max(math.sqrt(fx * fx + fn * fn), 1e-3)  # distance to the sheet (km)
+                    if abs(s) < cut:
+                        inside = True
+                        # brightness along the arc: soft ends, slow surges and patches
+                        q = (x - c[1]) / c[2]
+                        win = min(max((1.0 - abs(q)) / 0.6, 0.0), 1.0)
+                        win = win * win * (3.0 - 2.0 * win)
+                        slow = 0.2 + 0.8 * _noise1(x / 240.0, seed + 3) ** 1.5
+                        patch = 0.55 + 0.9 * _noise1(x / 70.0, seed + 4) ** 2
+                        b = c[3] * win * slow * patch * aw
+                        # fine rays (strands along the field lines) across the sheet
+                        s1 = _noise1(u / 1.3, seed + 5)
+                        s2 = _noise1(u / 4.0, seed + 6)
+                        s3 = _noise1(u / 11.0, seed + 7)
+                        ray = 0.3 + s2 * s2 * (0.5 + 1.8 * s1 ** 3) + 0.35 * s3
+                        g = math.exp(-0.5 * (s / sigma) ** 2) * norm * dr
+                        w = g * b
+                        if w > 0.0:
+                            if start < 0.0:
+                                start = r
+                            h0 = c[12] + 7.0 * (_noise1(x / 160.0, seed + 8) - 0.5) + 2.5 * (s2 - 0.5)
+                            hg = 10.0 + 32.0 * (0.6 * s2 + 0.4 * s1) ** 1.5 * (0.6 + 0.8 * s3)
+                            fr = c[13] * min(max((_noise1(x / 130.0, seed + 9) - 0.45) * 4.0, 0.0), 1.0)
+                            wsum += w
+                            wr += w * r
+                            wf += w * ray
+                            wd += w * (0.55 + 0.45 * s3)
+                            wh0 += w * h0
+                            whg += w * hg
+                            wfr += w * fr
+                            if r - start >= chunk:
+                                nch = _aurora_flush(out, ci, nch, wsum, wr, wf, wd, wh0, whg, wfr)
+                                wsum = wr = wf = wd = wh0 = whg = wfr = 0.0
+                                start = -1.0
+                if not inside and wsum > 0.0:
+                    nch = _aurora_flush(out, ci, nch, wsum, wr, wf, wd, wh0, whg, wfr)
+                    wsum = wr = wf = wd = wh0 = whg = wfr = 0.0
+                    start = -1.0
+                # far from this sheet, stride faster: |grad F| stays below ~4 (8 allowed for),
+                # so a stride never jumps over the band |F| < 6 cut examined above
+                r += dr if abs(f) < 8.0 * cut else max(dr, 0.12 * (abs(f) - 6.0 * cut))
+            nch = _aurora_flush(out, ci, nch, wsum, wr, wf, wd, wh0, whg, wfr)
+        count[ci] = nch
+
+
+@njit(parallel=True, fastmath=True)
+def _aurora_pixels(dirs, az0, daz, cols, count, green, red, violet, pink, out):
+    rr = R_EARTH_KM + OBSERVER_KM
+    for i in prange(dirs.shape[0]):
+        dx, dy, dz = dirs[i, 0], dirs[i, 1], dirs[i, 2]
+        out[i, 0] = out[i, 1] = out[i, 2] = 0.0
+        ch = math.sqrt(dx * dx + dz * dz)  # cos(elevation)
+        if dy <= 0.0 or ch < 1e-4:
+            continue
+        fa = (math.atan2(dx, -dz) - az0) / daz
+        if fa < 0.0 or fa > count.shape[0] - 1.001:
+            continue
+        j = int(fa)
+        ta = fa - j
+        tan_e = dy / ch
+        acc_r = acc_g = acc_b = 0.0
+        for side in range(2):
+            col = j + side
+            wcol = (1.0 - ta) if side == 0 else ta
+            if wcol <= 0.0:
+                continue
+            for k in range(count[col]):
+                r = cols[col, k, 0]
+                y = r * tan_e
+                h = math.sqrt(r * r + (rr + y) * (rr + y)) - R_EARTH_KM
+                if h > 460.0:
+                    continue
+                z = h - cols[col, k, 3]
+                if z < -9.0:
+                    continue
+                wf = cols[col, k, 1] * wcol
+                wd = cols[col, k, 2] * wcol
+                # green: sharp lower border, fading upwards over the strand's own height
+                edge = 1.0 / (1.0 + math.exp(-z / 0.8))
+                zp = max(z, 0.0)
+                gr = edge * (0.35 * math.exp(-zp / 5.0) + 0.55 * math.exp(-zp / cols[col, k, 4])
+                             + 0.10 * math.exp(-zp / (2.0 * cols[col, k, 4])))
+                # pink fringe just under the border
+                pk = cols[col, k, 5] * 0.8 * math.exp(-((z + 2.4) / 2.0) ** 2)
+                # diffuse red tops and a trace of sunlit violet
+                hr = (h - 140.0) / 70.0
+                rd = 0.0
+                if hr > 0.0:
+                    hr = min(hr, 1.0)
+                    rd = 0.055 * hr * hr * (3.0 - 2.0 * hr) * math.exp(-max(h - 240.0, 0.0) / 70.0)
+                hv = min(max((h - 210.0) / 70.0, 0.0), 1.0)
+                vi = 0.035 * hv * hv * (3.0 - 2.0 * hv) * math.exp(-max(h - 300.0, 0.0) / 60.0)
+                a_g = wf * gr
+                a_p = wf * pk
+                a_r = wd * rd * edge
+                a_v = wd * vi
+                acc_r += a_g * green[0] + a_p * pink[0] + a_r * red[0] + a_v * violet[0]
+                acc_g += a_g * green[1] + a_p * pink[1] + a_r * red[1] + a_v * violet[1]
+                acc_b += a_g * green[2] + a_p * pink[2] + a_r * red[2] + a_v * violet[2]
+        inv = 1.0 / ch  # path length through a vertical sheet grows as 1 / cos(elevation)
+        out[i, 0] = acc_r * inv
+        out[i, 1] = acc_g * inv
+        out[i, 2] = acc_b * inv
+
+
+class Aurora:
+    """The northern lights as linear sky radiance (world frame, before extinction)."""
+
+    def __init__(self, curtains=AURORA_CURTAINS, az_step_deg=0.04, gain=AURORA_GAIN, sat=AURORA_SAT):
+        n = int(round(2 * AURORA_AZ / az_step_deg)) + 1
+        self.az = np.radians(np.linspace(-AURORA_AZ, AURORA_AZ, n))
+        self.cols = np.zeros((n, AURORA_MAX_CHUNKS, 6), dtype=np.float32)
+        self.count = np.zeros(n, dtype=np.int64)
+        _aurora_columns(self.az, np.ascontiguousarray(curtains, dtype=np.float64), AURORA_R[0], AURORA_R[1],
+                        AURORA_DR, AURORA_CHUNK, AURORA_SIGMA, AURORA_SPAN[0], AURORA_SPAN[1], self.cols, self.count)
+        if self.count.max() >= AURORA_MAX_CHUNKS:
+            log(f"  warning: aurora column overflow ({self.count.max()} chunks), raise AURORA_MAX_CHUNKS")
+        self.gain, self.sat = gain, sat
+
+    def radiance(self, dirs):
+        flat = np.ascontiguousarray(dirs.reshape(-1, 3), dtype=np.float64)
+        out = np.zeros((flat.shape[0], 3))
+        _aurora_pixels(flat, self.az[0], self.az[1] - self.az[0], self.cols, self.count,
+                       AURORA_GREEN, AURORA_RED, AURORA_VIOLET, AURORA_PINK, out)
+        out *= self.gain
+        # Exposure roll-off: a fold seen edge-on is tens of times brighter than the sheet
+        # seen face-on; compress it (hue kept) like a photo of a bright display.
+        g = np.maximum(out.max(axis=1), 1e-12)
+        out *= (self.sat * -np.expm1(-g / self.sat) / g)[:, None]
+        return out.reshape(*dirs.shape[:-1], 3)
+
+
+def daytime_skies():
+    """Sky models and exposures of the daytime layers: {name: (SkyModel, exposure)}."""
     day_suns = [atm.sun_direction(el, side) for el in (25, 45, 65, 85) for side in (1, -1)]
     skies = {
         "day": atm.SkyModel(day_suns, mie_g=0.7),
@@ -235,12 +502,28 @@ def overworld_layers(face, ss, pad, galaxy, log_prefix="  "):
         "sunset": atm.SkyModel([atm.sun_direction(2.0, -1)]),
     }
     zen = np.array([[0.0, 1.0, 0.0]])
-    e_sky = {"day": SKY_KEY / float(skies["day"].radiance(zen)[0] @ bh.LUMA)}
+    out = {"day": (skies["day"], SKY_KEY / float(skies["day"].radiance(zen)[0] @ bh.LUMA))}
     for name, side in (("sunrise", 1), ("sunset", -1)):
         hor = bh.normalize(np.array([[side, 0.08, 0.0]]))
-        e_sky[name] = TWILIGHT_KEY / float(skies[name].radiance(hor)[0] @ bh.LUMA)
-    # The black hole's brightness through the haze, relative to each sky.
-    e_bh = {"night": e_disk, "day": 0.55 * e_disk, "sunrise": 0.65 * e_disk, "sunset": 0.65 * e_disk}
+        out[name] = (skies[name], TWILIGHT_KEY / float(skies[name].radiance(hor)[0] @ bh.LUMA))
+    return out
+
+
+def overworld_layers(face, ss, pad, galaxy, log_prefix="  "):
+    """Night / sunrise / day / sunset / overcast skies for the Overworld (OptiFine 3x2).
+
+    By day the sky is just the physical atmosphere (the sun is the game's own sprite).
+    The black hole belongs to the night: the night layer shows it with the real stars,
+    the Milky Way and the northern lights in the north, and it fades in at dusk as the
+    night layer cross-fades in under the sunset (see OVERWORLD_LAYERS)."""
+    scene = kerr.KerrScene(background=galaxy, **OVERWORLD)
+    w2s = bh.world_to_scene(OVERWORLD_DIR)
+    em = Emitter(scene, w2s)
+    e_disk = DISK_KEY / em.p997
+    aurora = Aurora()
+    log(f"{log_prefix}northern lights: {int(aurora.count.sum())} curtain crossings")
+    daytime = daytime_skies()
+    clear_air = daytime["day"][0]  # transmittance of the whole atmosphere (independent of the sun)
 
     names = ["night", "sunrise", "day", "sunset"]
     imgs = {n: np.zeros((2 * face, 3 * face, 3), dtype=np.uint8) for n in names}
@@ -250,22 +533,26 @@ def overworld_layers(face, ss, pad, galaxy, log_prefix="  "):
         fn = lambda n, p: optifine_tile_dirs(tile, n, p)  # noqa: E731
         raw, world = render_padded(scene, w2s, fn, face, ss, pad)
         halo = upsample(em.glow(fn(lo_face, lo_pad), AUREOLE), full)
-        trn = skies["day"].transmittance(world)
+        trn = clear_air.transmittance(world)
         disk, stars = raw[..., :3], raw[..., 3:6]
         r, c = divmod(tile, 3)
         for name in names:
-            e = e_bh[name]
-            if name == "night":  # clear night air carries less haze than daytime air
-                # eyes adapt at night: the sky background is lifted twice as much
-                hdr = (disk + stars * BG_GAIN * 2) * trn * e + halo * e * 0.35 + airglow(world)
+            if name == "night":
+                # Clear night air carries less haze than daytime air, and eyes adapt at night:
+                # the sky background is lifted twice as much. The aurora glows 100-300 km up,
+                # in front of the stars, and is dimmed by the same air near the horizon.
+                hdr = ((disk + stars * BG_GAIN * 2) * trn * e_disk + halo * e_disk * 0.35 + airglow(world)
+                       + aurora.radiance(world) * trn)
             else:
-                hdr = disk * trn * e + halo * e + skies[name].radiance(world) * e_sky[name]
+                sky, e_sky = daytime[name]
+                hdr = sky.radiance(world) * e_sky
             hdr = crop(bh.glare(hdr, scale=face / 1024), pad)
             imgs[name][r * face:(r + 1) * face, c * face:(c + 1) * face] = to8(
                 hdr, 100 + tile if name == "night" else None)
         log(f"{log_prefix}overworld tile {tile + 1}/6")
 
-    # Rain: the hole is only a diffuse glow through the clouds.
+    # Rain: an overcast sky (CIE overcast luminance: brighter towards the zenith). At
+    # night the hole is only a diffuse glow through the clouds; they hide the aurora.
     oc = max(face // 4, 64)
     over = {n: np.zeros((2 * oc, 3 * oc, 3), dtype=np.uint8) for n in ("overcast_day", "overcast_night")}
     for tile in range(6):
@@ -274,7 +561,7 @@ def overworld_layers(face, ss, pad, galaxy, log_prefix="  "):
         cloud = (1 + 2 * s) / 3 * np.array([0.80, 0.82, 0.86])
         glow = em.glow(d, CLOUD_GLOW) * 0.4
         r, c = divmod(tile, 3)
-        over["overcast_day"][r * oc:(r + 1) * oc, c * oc:(c + 1) * oc] = to8(cloud * 0.42 + glow * e_bh["day"])
+        over["overcast_day"][r * oc:(r + 1) * oc, c * oc:(c + 1) * oc] = to8(cloud * 0.42)
         over["overcast_night"][r * oc:(r + 1) * oc, c * oc:(c + 1) * oc] = to8(
             cloud * 0.012 + glow * e_disk * 0.35, 200 + tile)
     imgs.update(over)
@@ -518,6 +805,9 @@ Gargantua says hi!
 Also try the Nether!
 Night vision recommended!
 Bring a totem!
+Northern lights tonight!
+557.7 nanometres of green!
+Look north after dark!
 """
 
 
@@ -531,7 +821,7 @@ PACK_MCMETA = {
             "",  # empty root so the parts below don't inherit each other's style
             {"text": "Diamond SMP ", "color": "aqua", "bold": True},
             {"text": "Black Hole Sky", "color": "light_purple"},
-            {"text": "\nSpinning black hole • real stars • day & night", "color": "gray"},
+            {"text": "\nBlack hole by night • northern lights • real stars", "color": "gray"},
         ],
         # 1.20 (format 15) and everything newer, including 1.21.9+ min/max fields.
         "pack_format": 34,
@@ -543,14 +833,22 @@ PACK_MCMETA = {
 
 # (texture, description, (startFadeIn, endFadeIn, endFadeOut), weather). Order matters:
 # later layers are drawn over earlier ones while they fade.
+# The black hole is only in the night layers. The clear night layer sits under the sunset
+# layer, which stays fully opaque until 18:30 (the sun sets at 18:47), so the hole and
+# the northern lights appear only as the sunset fades out (~15% at sunset, full at
+# 19:30), long after the day layer has gone (18:00); at dawn they fade out under the
+# sunrise (sun up at 05:13) before the day layer starts. The rain-night layer is drawn
+# over the rain-day layer, so it starts fading in only when that one starts fading out
+# (17:30).
 OVERWORLD_LAYERS = [
-    ("night", "Night: deep space, the Milky Way and the black hole", ("18:15", "19:15", "05:45"), "clear"),
+    ("night", "Night: deep space, the Milky Way, the black hole and the northern lights",
+     ("18:15", "19:15", "05:45"), "clear"),
     ("sunrise", "Sunrise: physical sky, sun rising in the east", ("04:30", "05:30", "07:45"), "clear"),
-    ("day", "Day: blue sky, the black hole shining through the haze", ("06:15", "07:30", "18:00"), "clear"),
+    ("day", "Day: clear blue physical sky (the black hole only comes out at night)", ("06:15", "07:30", "18:00"),
+     "clear"),
     ("sunset", "Sunset: physical sky, sun setting in the west", ("16:15", "17:15", "19:30"), "clear"),
-    ("overcast_day", "Rain by day: the black hole glows behind the clouds", ("05:00", "06:30", "19:00"),
-     "rain thunder"),
-    ("overcast_night", "Rain by night: a faint glow behind the clouds", ("17:15", "18:45", "06:45"),
+    ("overcast_day", "Rain by day: a plain overcast sky", ("05:00", "06:30", "19:00"), "rain thunder"),
+    ("overcast_night", "Rain by night: the black hole a faint glow behind the clouds", ("17:30", "18:45", "06:30"),
      "rain thunder"),
 ]
 
@@ -650,12 +948,14 @@ def build(quick):
     write_text("assets/minecraft/optifine/sky/world1/sky1.properties", END_SKY)
     del galaxy
 
-    log("photorealistic sun and moon (so the sky has exactly one black hole)")
+    log("photorealistic sun, and the Earth in place of the moon")
     res = 256 if quick else 512
     sun = celestial.make_sun(res)
     save(sun, "textures/environment/sun.png")             # up to 1.21.10
     save(sun, "textures/environment/celestial/sun.png")   # 1.21.11 and newer
-    phases = celestial.make_moon_phases(res)
+    # The moon's eight phases become the Earth seen from space: same phase angles and lit
+    # sides, a different face of the turning planet each night, city lights on the dark side.
+    phases = earth.make_earth_phases(res, map_width=1024 if quick else 2048)
     for name, img in phases.items():
         save(img, f"textures/environment/celestial/moon/{name}.png")
     save(celestial.moon_phase_sheet(phases), "textures/environment/moon_phases.png")

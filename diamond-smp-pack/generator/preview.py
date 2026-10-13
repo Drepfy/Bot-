@@ -11,6 +11,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 import blackhole as bh
+import earth
 import kerr
 import real_sky
 from build_pack import MC, OPTIFINE_TILES, OVERWORLD, OVERWORLD_DIR, ROOT
@@ -150,7 +151,7 @@ def main():
     Image.fromarray(night.astype(np.uint8)).save(PREVIEWS / "overworld_night.png", optimize=True)
     shots.append(label(night, "Night"))
 
-    d = player_view(-45, -12, W, H, 78)  # south-east: sunrise and the black hole
+    d = player_view(-45, -12, W, H, 78)  # south-east: sunrise (by day the sky has no black hole)
     img = add_sun(sample_optifine(sky("sunrise"), d), d, bh.normalize([1.0, 0.05, 0.0]))
     sunrise = add_ground(img, d, (34, 30, 30))
     shots.append(label(sunrise, "Sunrise"))
@@ -167,6 +168,11 @@ def main():
 
     grid = np.concatenate([np.concatenate(shots[:2], 1), np.concatenate(shots[2:], 1)], 0).astype(np.uint8)
     Image.fromarray(grid).resize((W, H), Image.LANCZOS).save(PREVIEWS / "day_cycle.png", optimize=True)
+
+    # The northern lights: turn around at night and look north.
+    d = player_view(180, -20, W, H, 80)
+    aurora = add_ground(sample_optifine(sky("night"), d), d, (8, 11, 8))
+    Image.fromarray(aurora.astype(np.uint8)).save(PREVIEWS / "northern_lights.png", optimize=True)
 
     d = player_view(0, -14, W // 2, H // 2)
     rain = np.concatenate([
@@ -220,17 +226,22 @@ def main():
     sun_day = additive("textures/environment/celestial/sun.png", np.array([90, 140, 230]))
     sun_night = additive("textures/environment/celestial/sun.png", np.zeros(3))
     s = sun_day.shape[0]
-    order = ["waxing_crescent", "first_quarter", "waxing_gibbous", "full_moon",
+    order = ["new_moon", "waxing_crescent", "first_quarter", "waxing_gibbous", "full_moon",
              "waning_gibbous", "third_quarter", "waning_crescent"]
-    moons = [additive(f"textures/environment/celestial/moon/{n}.png", np.full(3, 4.0)) for n in order]
-    m = moons[0].shape[0]
-    crop = [mo[m * 3 // 8:m * 5 // 8, m * 3 // 8:m * 5 // 8] for mo in moons]  # zoom on the disc
-    strip = Image.fromarray(np.concatenate(crop, 1)).resize((7 * s // 3, s // 3), Image.LANCZOS)
+    earths = [additive(f"textures/environment/celestial/moon/{n}.png", np.full(3, 4.0)) for n in order]
+    m = earths[0].shape[0]
+    crop = [e[int(m * 0.31):int(m * 0.69), int(m * 0.31):int(m * 0.69)] for e in earths]  # zoom on the globe
+    strip = Image.fromarray(np.concatenate(crop, 1)).resize((8 * s // 3, s // 3), Image.LANCZOS)
     top = np.concatenate([sun_day, sun_night], 1)
     sheet = Image.new("RGB", (max(top.shape[1], strip.width), top.shape[0] + strip.height), (4, 4, 4))
-    sheet.paste(Image.fromarray(top), (0, 0))
+    sheet.paste(Image.fromarray(top), ((sheet.width - top.shape[1]) // 2, 0))
     sheet.paste(strip, ((sheet.width - strip.width) // 2, top.shape[0]))
     sheet.save(PREVIEWS / "sun_moon.png", optimize=True)
+
+    # The Earth in place of the moon: all eight phases, big.
+    phases = {n: np.array(Image.open(MC / f"textures/environment/celestial/moon/{n}.png").convert("RGBA"))
+              for n in order}
+    earth.preview_sheet(phases, PREVIEWS / "earth_phases.png")
     print("previews written to", PREVIEWS)
 
 

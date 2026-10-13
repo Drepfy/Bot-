@@ -1,6 +1,9 @@
 # 💎 Diamond SMP: Black Hole Sky
 
-A vanilla-friendly Minecraft Java resource pack. Blocks, items and mobs keep their vanilla textures. The sky gets **one physically ray-traced, spinning black hole**: Sagittarius A\*, the real black hole at the centre of our galaxy, shown up close. It sits in front of the **real night sky** with real stars and constellations. A real atmosphere renders the day, sunrise, sunset, night and rain around it, with a photorealistic sun and moon.
+A vanilla-friendly Minecraft Java resource pack. Blocks, items and mobs keep their vanilla textures. The sky changes:
+* **At night** a physically ray-traced, spinning **black hole** rises: Sagittarius A\*, the real black hole at the centre of our galaxy, shown up close. It sits in front of the **real night sky** with real stars and constellations, and the **northern lights** ripple over the northern horizon.
+* **By day** you get a clean, physically rendered day sky: blue overhead, golden at sunrise and sunset, with a photorealistic sun.
+* **The moon is the Earth**: our planet seen from space, with real continents, oceans, ice caps, swirling storms and, on its dark side, the lights of the world's cities.
 
 **Download:**
 * [`Diamond-SMP-Black-Hole-Pack.zip`](Diamond-SMP-Black-Hole-Pack.zip): full quality.
@@ -16,19 +19,25 @@ A vanilla-friendly Minecraft Java resource pack. Blocks, items and mobs keep the
 
 ![Rain](previews/rain.png)
 
-| Real stars (north-west: Big Dipper, Polaris, Arcturus) | Sun and moon phases |
+| Real stars (north-west: Big Dipper, Polaris, Arcturus) | Northern lights (look north at night) |
 |---|---|
-| ![Real stars](previews/real_stars_north.png) | ![Sun and moon](previews/sun_moon.png) |
+| ![Real stars](previews/real_stars_north.png) | ![Northern lights](previews/northern_lights.png) |
+
+**The Earth in place of the moon**, through Minecraft's eight moon phases:
+
+![Earth phases](previews/earth_phases.png)
 
 ## What's in the pack
 
 | Feature | Needs |
 |---|---|
-| **Day / sunrise / sunset / night skies** that cross-fade with the Minecraft clock. The black hole sits due south, 24° up, all day, exactly where Sagittarius A\* really is on a summer night at latitude 37° N. | OptiFine (or Nuit + Nuit Interop) |
-| **Rain skies:** overcast by day and night, with the black hole a soft glow behind the clouds | OptiFine (or equivalent) |
+| **Day / sunrise / sunset / night skies** that cross-fade with the Minecraft clock. Day, sunrise and sunset are clean physical skies. As the sun sets, the black hole fades in due south, 24° up, exactly where Sagittarius A\* really is on a summer night at latitude 37° N. | OptiFine (or Nuit + Nuit Interop) |
+| **Northern lights** in the night sky: green curtains with crimson tops and fine rays, low over the northern horizon | OptiFine (or equivalent), or animated with the Shader Sky add-on |
+| **Rain skies:** a grey overcast day; at night the black hole is a soft glow behind the clouds | OptiFine (or equivalent) |
 | Purple "ender light" black hole over the End | OptiFine (or equivalent) |
-| **Live black hole + real night sky with no sky mod:** the disk's gas visibly orbits, and stars twinkle and are bent by gravity | The [Shader Sky add-on](#shader-sky-add-on-no-mods), 1.21.9+ |
-| **Photorealistic sun and moon.** The sun is a limb-darkened 5,772 K disc with granulation and glare. The moon is our Moon: real maria and named craters (Tycho with its rays, Copernicus, Plato…), 8 phases lit by the real lunar reflectance law, and faint earthshine. So the sky has exactly **one** black hole. | Nothing, pure vanilla |
+| **Live black hole + real night sky + animated northern lights with no sky mod:** the disk's gas visibly orbits, stars twinkle and are bent by gravity, shooting stars streak past | The [Shader Sky add-on](#shader-sky-add-on-no-mods), 1.21.9+ |
+| **Photorealistic sun.** A limb-darkened 5,772 K disc with granulation and glare. | Nothing, pure vanilla |
+| **The Earth as the moon.** Real continents and coastlines, deserts, rainforests, ice caps and turquoise shallows; a weather snapshot of clouds with cyclones and hurricanes; a glinting ocean, a blue rim of air and a reddened sunset line. The night side glows with real city lights: the US, Europe, the Nile, India, China and Japan. Each of the 8 phases shows a different side of the turning planet, and the "new Earth" is ringed by the light of every sunset at once. | Nothing, pure vanilla |
 | **Title screen:** a slowly spinning black hole with the Milky Way bent around it | Nothing |
 | **"DIAMOND SMP" logo** made of diamond blocks, plus a "Black Hole Edition" subtitle | Nothing |
 | Custom splash texts, a deep space End sky, and the pack icon | Nothing |
@@ -48,11 +57,16 @@ Every pixel is computed from physics, not painted:
 * **Real sky:** Rayleigh, Mie and ozone scattering in Earth's atmosphere.
   * That gives the blue day sky, the orange-to-pink sunrise and sunset, and twilight that stays blue overhead.
   * The black hole and stars dim and redden near the horizon, and a soft haze glows around the black hole.
-  * By day, sky light fills in the shadow, the same way the Moon's dark side disappears in daylight.
 * **The real night sky:**
   * All ~8,800 naked-eye stars of the Yale Bright Star Catalogue (public domain) sit at their true positions and colors for latitude 37° N, with Sagittarius A\* on the meridian. Scorpius and the Sagittarius teapot flank the hole, the Summer Triangle is overhead, and the Big Dipper and Polaris are in the north.
   * Fainter stars follow real counts.
   * The Milky Way runs along the true galactic plane, with its bulge right behind the hole, where it is lensed into a golden Einstein ring. It also has dark dust lanes, pink hydrogen nebulae, and faint airglow at the horizon.
+* **The northern lights:** curtains of light 100-300 km up, glowing in the real colors of excited oxygen and nitrogen. Green (557.7 nm) has a sharp lower border, crimson (630 nm) is at the top, and there's a hint of violet. They are traced through a curved Earth so the far ends of each arc sink into the horizon.
+* **The Earth:** built from public-domain [Natural Earth](https://www.naturalearthdata.com) map data and lit physically.
+  * The land is Lambertian. The oceans have a wind-roughened sun glint.
+  * Clouds cast shadows.
+  * Rayleigh and aerosol scattering give the blue limb and the orange terminator.
+  * City lights are placed from real urban areas and populations.
 * **Camera optics:** glare around bright light, and a filmic tone curve like a long-exposure astrophoto.
 
 ## Install
@@ -72,15 +86,17 @@ There are two ways to get the black hole into the Overworld sky. Pick **one**:
   * **OptiFine:** Options → Video Settings → Quality → **Custom Sky: ON**.
   * **Fabric / Sodium / Iris:** install **[Nuit](https://modrinth.com/mod/nuit)** and **[Nuit Interop](https://modrinth.com/nuit-interop)**. Nuit Interop loads OptiFine custom skies.
 
-With neither, you still get the photorealistic sun and moon, the black hole title screen, the logo, the splashes and the deep space End sky.
+With neither, you still get the photorealistic sun, the Earth as the moon, the black hole title screen, the logo, the splashes and the deep space End sky.
 
 ## Shader Sky add-on (no mods!)
 
-[`Diamond-SMP-Shader-Sky.zip`](Diamond-SMP-Shader-Sky.zip) is a small separate pack (190 kB). Put it **above** the main pack. It replaces Minecraft's sky and star shaders, so your graphics card draws the sky live, every frame:
+[`Diamond-SMP-Shader-Sky.zip`](Diamond-SMP-Shader-Sky.zip) is a small separate pack (about 200 kB). Put it **above** the main pack. It replaces Minecraft's sky and star shaders, so your graphics card draws the sky live, every frame:
 
 ![Shader sky](previews/shader_sky.png)
 
-![The disk orbiting, at night](previews/shader_sky_night.gif)
+| The disk orbiting, at night | The northern lights, looking north |
+|---|---|
+| ![The disk orbiting](previews/shader_sky_night.gif) | ![Northern lights](previews/shader_sky_aurora.gif) |
 
 * **The black hole is ray traced on your GPU.** Each sky pixel near it follows a light ray through the curved spacetime of a black hole. That gives the black shadow, the thin photon ring, the far side of the disk bent over the top and under the bottom, blackbody colors, and the Doppler-bright side.
 * **The gas really orbits.** Inner gas laps faster than outer gas, like real orbits, driven by the game clock. It stands still when the game is paused.
@@ -89,11 +105,16 @@ With neither, you still get the photorealistic sun and moon, the black hole titl
   * Thousands of fainter stars crowd into the Milky Way, which has dark dust lanes.
   * Stars twinkle, more so near the horizon, where air also dims and reddens them.
   * **Gravity bends all of it.** Stars near the hole are pushed aside, and the bright galactic bulge right behind it wraps into a glowing Einstein ring.
-* **It follows vanilla's rules.** The stars fade in at dusk and vanish in rain, exactly when vanilla's would. By day the hole is a pale ghost in the blue, like the Moon. In rain it is a faint glow behind the clouds. Thick fog (water, lava, powder snow) hides it.
+* **The black hole belongs to the night.** It fades in at sunset, shines all night and is gone in daylight. By day the sky is exactly vanilla's, and it costs nothing. Thick fog (water, lava, powder snow) hides it.
+* **Northern lights**, animated. Green curtains with crimson tops ripple over the northern horizon, slowly folding and drifting, while fine rays shimmer.
+* **Shooting stars** streak across the night sky every now and then.
+* **It follows vanilla's rules.** The stars and northern lights fade in at dusk and vanish in rain, exactly when vanilla's stars would.
 
 **Works with:** Minecraft **1.21.9 to 1.21.11, 26.1, 26.2 and 26.3** (one copy of the shaders per version inside the zip), on vanilla and Sodium. On any other version it does nothing.
 
-**Doesn't work with:** Iris/OptiFine *shader packs* (they replace the whole sky with their own). If you use OptiFine's or Nuit's custom sky, turn that off to see this one, or skip this add-on. Otherwise you'd get two black holes on top of each other.
+**Doesn't work with:** Iris/OptiFine *shader packs* (they replace the whole sky with their own).
+
+**With a sky mod** (OptiFine, Nuit or Skyboxify custom skies): nothing to do. While the add-on is on, it hides the main pack's painted Overworld sky, so you never see two black holes or doubled stars. Take the add-on out and the painted sky is back.
 
 **Performance:** the black hole is only ray traced where it is on screen, and the stars cost about as much as a light shader effect. On a mid-range graphics card you shouldn't notice it. On a laptop with integrated graphics, use [`Diamond-SMP-Shader-Sky-Lite.zip`](Diamond-SMP-Shader-Sky-Lite.zip). It takes bigger ray steps, uses a simpler Milky Way and drops the faint stars, and looks almost the same. If FPS still drops when you look at the sky, remove the add-on.
 
@@ -169,7 +190,9 @@ python generator/merge_packs.py path/to/OtherPack.zip          # or add --lite
 python generator/merge_packs.py path/to/OtherPack.zip --vanilla armor potions --light-boost --sky-shader
 ```
 
-`--sky-shader lite` adds the Lite shader sky instead. `--vanilla armor` drops the other pack's armor icons, worn armor, armor glint and trim colors. `--vanilla potions` drops its potion bottles, effect icons, effect backgrounds and potion particles. Without those files, the vanilla look of your Minecraft version shows through.
+`--sky-shader lite` adds the Lite shader sky instead; with either, the live sky replaces the painted Overworld skybox. `--vanilla armor` drops the other pack's armor icons, worn armor, armor glint and trim colors. `--vanilla potions` drops its potion bottles, effect icons, effect backgrounds and potion particles. Without those files, the vanilla look of your Minecraft version shows through.
+
+**Sodium-safe:** Sodium refuses packs that replace the terrain shaders and shows red "incompatible with Sodium" messages, for example over wavy-leaves shaders. So the merge leaves the other pack's terrain shaders out, along with the files only they used. It also drops files whose names Minecraft ignores anyway. Everything left out is listed in `DIAMOND_SMP_MERGE.txt` inside the zip. Add `--keep-terrain-shaders` if you play without Sodium and want them.
 
 ⚠️ Merged zips are **for your own use**. Many packs (Fortyone included) forbid sharing modified versions, so don't upload one or use it as the server pack without that author's permission.
 
@@ -191,6 +214,7 @@ Get the SHA-1 with `sha1sum Diamond-SMP-Black-Hole-Pack.zip` (macOS: `shasum`, W
 All of these are plain-text edits inside the zip, under `assets/minecraft/`.
 
 * **Black hole in deep space all day:** delete `optifine/sky/world0/sky2`–`sky4.properties`. In `sky1.properties`, set `blend=replace` and delete the three `Fade` lines.
+* **The Moon instead of the Earth:** delete `textures/environment/moon_phases.png` and the `textures/environment/celestial/moon/` folder (you get vanilla's moon back).
 * **Change when skies fade:** edit the `startFadeIn` / `endFadeIn` / `endFadeOut` times in `optifine/sky/world0/sky*.properties`. The format is 24h, and 06:00 is sunrise in Minecraft.
 * **Keep the vanilla sun and moon:** delete `textures/environment/sun.png`, `textures/environment/moon_phases.png` and the `textures/environment/celestial/` folder.
 * **Your own splashes:** edit `texts/splashes.txt`, one per line.
@@ -202,9 +226,14 @@ Every texture is generated from scratch by [`generator/`](generator). No Mojang 
 * [`kerr.py`](generator/kerr.py): the spinning (Kerr) black hole ray tracer (Numba), with tests against analytic results in `generator/tests/`.
 * [`blackhole.py`](generator/blackhole.py): blackbody color science, procedural galaxy, glare and tone mapping (plus the original non-spinning tracer).
 * [`real_sky.py`](generator/real_sky.py): the Yale Bright Star Catalogue placed in the Minecraft sky.
-* [`celestial.py`](generator/celestial.py): the photorealistic sun and moon.
+* [`celestial.py`](generator/celestial.py): the photorealistic sun (and the photoreal Moon it used to ship).
+* [`earth.py`](generator/earth.py): the Earth in place of the moon, rendered for each of the 8 phases from these maps:
+  * [`natural_earth.py`](generator/natural_earth.py): public-domain Natural Earth map data ("Made with Natural Earth"), rasterised.
+  * [`earth_surface.py`](generator/earth_surface.py): true-colour land, deserts, forests, ice, shelves and relief.
+  * [`earth_clouds.py`](generator/earth_clouds.py): a weather snapshot of clouds.
+  * [`earth_lights.py`](generator/earth_lights.py): the night side's city lights.
 * [`atmosphere.py`](generator/atmosphere.py): single-scattering Rayleigh, Mie and ozone sky model.
-* [`build_pack.py`](generator/build_pack.py): renders every layer and zips the full and Lite packs.
+* [`build_pack.py`](generator/build_pack.py): renders every layer (northern lights included) and zips the full and Lite packs.
   * Skyboxes are 3072×2048, 2×2 supersampled, and padded so glare is seamless across cube faces.
 * [`preview.py`](generator/preview.py): reads the textures back the way the game maps them, to make the screenshots above.
 * [`shader_sky.py`](generator/shader_sky.py): writes the Shader Sky add-on's GLSL and checks it.
@@ -212,7 +241,7 @@ Every texture is generated from scratch by [`generator/`](generator). No Mojang 
   * It compiles every shader against each supported version's vanilla includes with `glslangValidator`, in Vulkan mode for 26.3.
 * [`shader_preview.py`](generator/shader_preview.py): runs those shaders in WebGL (headless Chromium) on vanilla's sky disc and star mesh with vanilla's matrices.
   * It makes the pictures above.
-  * `--check` confirms that bright stars land within a pixel of their catalogue positions after lensing.
+  * `--check` confirms three things: bright stars land within a pixel of their catalogue positions after lensing; the black hole only shows at night; and the northern lights stay in the northern night sky.
 * [`light_boost.py`](generator/light_boost.py): builds the Light Boost add-on from the vanilla lighting shaders.
 * [`merge_packs.py`](generator/merge_packs.py): personal merges with other packs.
 
